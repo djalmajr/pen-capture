@@ -4,6 +4,7 @@ import { isPageCaptureShortcut, pageCaptureModifier } from "../src/extension/sho
 import { createPencilClipboardHtml } from "../src/pencil-clipboard.mjs";
 import { fetchExtensionAsset } from "../src/extension/asset-fetch.mjs";
 import { effectiveFilter } from "../src/capture-element.mjs";
+import { captureProgressForElapsed } from "../src/extension/capture-progress.mjs";
 import { waitForVisualStability } from "../src/extension/visual-stability.mjs";
 
 describe("extension clipboard contract", () => {
@@ -37,6 +38,13 @@ describe("extension clipboard contract", () => {
     expect(content).toContain('event.key === "Escape"');
     expect(content).toContain('globalThis.addEventListener("keydown", cancelFromKeyboard, true)');
     expect(content).toContain('globalThis.removeEventListener("keydown", cancelFromKeyboard, true)');
+  });
+
+  test("reports bounded capture progress until real completion", () => {
+    expect(captureProgressForElapsed(0)).toBe(4);
+    expect(captureProgressForElapsed(450)).toBeGreaterThanOrEqual(20);
+    expect(captureProgressForElapsed(450)).toBeLessThan(35);
+    expect(captureProgressForElapsed(60_000)).toBe(95);
   });
 
   test("resolves redirected image URLs before Pencil receives them", async () => {

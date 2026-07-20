@@ -35,15 +35,32 @@ try {
   await page.mouse.move(box.x + Math.min(40, box.width / 2), box.y + Math.min(40, box.height / 2));
   await page.mouse.click(box.x + Math.min(40, box.width / 2), box.y + Math.min(40, box.height / 2));
 
-  const state = async () => page.locator("#__pencil_capture_host__").evaluate((host) => ({
-    selectionHidden:host.shadowRoot.querySelector(".selection-view").hidden,
-    capturingHidden:host.shadowRoot.querySelector(".capturing-view").hidden,
-    successHidden:host.shadowRoot.querySelector(".success-view").hidden,
-    capturingText:host.shadowRoot.querySelector(".capturing-message").textContent,
-  }));
+  const state = async () => page.locator("#__pencil_capture_host__").evaluate((host) => {
+    const toolbar = host.shadowRoot.querySelector(".toolbar");
+    const progressElement = host.shadowRoot.querySelector(".capture-progress");
+    const toolbarWidth = toolbar.getBoundingClientRect().width;
+    return {
+      selectionHidden:host.shadowRoot.querySelector(".selection-view").hidden,
+      capturingHidden:host.shadowRoot.querySelector(".capturing-view").hidden,
+      successHidden:host.shadowRoot.querySelector(".success-view").hidden,
+      capturingText:host.shadowRoot.querySelector(".capturing-message").textContent,
+      progress:Number(progressElement.getAttribute("aria-valuenow")),
+      progressText:host.shadowRoot.querySelector(".capturing-percentage").textContent,
+      progressVisible:toolbar.classList.contains("is-capturing"),
+      progressFillRatio:toolbarWidth ? progressElement.getBoundingClientRect().width / toolbarWidth : 0,
+    };
+  });
   const capturing = await state();
   if (!capturing.selectionHidden || capturing.capturingHidden || !capturing.successHidden) {
     throw new Error(`Picker did not enter its exclusive capturing view: ${JSON.stringify(capturing)}`);
+  }
+  if (!capturing.progressVisible || capturing.progress < 1 || capturing.progress >= 100 || capturing.progressText !== `${capturing.progress}%`) {
+    throw new Error(`Picker did not expose a truthful intermediate progress state: ${JSON.stringify(capturing)}`);
+  }
+  await page.waitForTimeout(200);
+  const progressing = await state();
+  if (progressing.progress <= capturing.progress || progressing.progressFillRatio <= 0 || Math.abs(progressing.progressFillRatio - progressing.progress / 100) > 0.08) {
+    throw new Error(`Picker progress background did not visibly advance: ${JSON.stringify({ capturing, progressing })}`);
   }
   await page.waitForFunction(() => {
     const host = document.getElementById("__pencil_capture_host__");
@@ -69,7 +86,10 @@ try {
   if (!success.selectionHidden || !success.capturingHidden || success.successHidden || !clipboard.marker) {
     throw new Error(`Picker did not finish in its exclusive success view: ${JSON.stringify({ success, clipboard })}`);
   }
-  console.log(JSON.stringify({ url, escapeClosed:true, reopened:true, clicked:true, capturing, success, clipboard }));
+  if (success.progress !== 100 || success.progressVisible) {
+    throw new Error(`Picker did not complete and hide its progress background: ${JSON.stringify(success)}`);
+  }
+  console.log(JSON.stringify({ url, escapeClosed:true, reopened:true, clicked:true, capturing, progressing, success, clipboard }));
 } finally {
   await browser.close();
 }
