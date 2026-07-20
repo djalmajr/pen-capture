@@ -22,6 +22,8 @@ Capture browser UI into editable Pencil layers. Prefer the extension's native `d
 
 Direct extension paste preserves remote `http(s)` images and resolves redirect targets before Pencil fetches them. It translates supported `brightness()` and `grayscale()` filters into editable overlays and maps supported CSS blend modes to Pencil fills. Canvas content becomes a `Canvas · Materialization required` placeholder; unsupported raster filters remain metadata-only. When those pixels are required, use the scripted CLI/MCP path with `PENCIL_CAPTURE_MATERIALIZE_DIR` so assets are written to durable project-local files before insertion.
 
+Do not bypass the visual-stability wait before capture: animated SVG paths must stop changing before serialization. Preserve computed LAB-family colors and layer transparent gradients over the element's background color; otherwise status colors, empty bullets and patterned placeholders disappear.
+
 For nested catalogs, materialize each completed capture with `Copy` followed by deletion of the temporary insertion. Then query the copied subtree and normalize every copied layer to `Name (#currentId)`; copied descendants receive new IDs and must not retain stale suffixes.
 
 Never read, grep or edit `.pen` files through filesystem tools. Use Pencil MCP exclusively.

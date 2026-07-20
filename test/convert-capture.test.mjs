@@ -9,6 +9,8 @@ describe("cssColorToHex", () => {
     expect(cssColorToHex("oklch(0.153 0.006 107.1)")).toBe("#0C0C09");
     expect(cssColorToHex("rgba(0, 0, 0, 0)")).toBeNull();
     expect(cssColorToHex("none")).toBeNull();
+    expect(cssColorToHex("lab(66.9756 -58.27 19.5419)")).toBe("#00BC7D");
+    expect(cssColorToHex("lab(76.3898 14.5258 98.4589)")).toBe("#F0B100");
   });
 });
 
@@ -275,6 +277,27 @@ describe("convertCaptureToPencil", () => {
     expect(convertCaptureToPencil(capture).root.children[0]).toMatchObject({
       type:"frame",opacity:0.5,fill:{type:"color",color:"#BB4D00",blendMode:"color"},
     });
+  });
+
+  test("preserves LAB text colors and an empty colored badge bullet", () => {
+    const textStyles = {...rootStyles,backgroundColor:"transparent",color:"lab(66.9756 -58.27 19.5419)",fontFamily:"Noto Sans",fontSize:"14px",fontWeight:"600",fontStyle:"normal",lineHeight:"20px",textAlign:"start",textTransform:"none"};
+    const capture = {format:"pencil-capture-ir",version:1,rootPath:"0",label:"Status",source:{},nodes:[
+      {path:"0",parentPath:null,tag:"span",name:"badge",text:null,rect:{x:0,y:0,width:120,height:36},attributes:{},styles:{...rootStyles,backgroundColor:"transparent"}},
+      {path:"0.0",parentPath:"0",tag:"span",name:"amount",text:"+$4,200.00",textRect:{x:16,y:8,width:72,height:20},textRuns:[{text:"+$4,200.00",rect:{x:16,y:8,width:72,height:20}}],rect:{x:16,y:8,width:72,height:20},attributes:{},styles:textStyles},
+      {path:"0.1",parentPath:"0",tag:"span",name:"bullet",text:null,rect:{x:4,y:14,width:8,height:8},attributes:{},styles:{...rootStyles,backgroundColor:"lab(76.3898 14.5258 98.4589)",borderTopLeftRadius:"33554400px",borderTopRightRadius:"33554400px",borderBottomRightRadius:"33554400px",borderBottomLeftRadius:"33554400px"}},
+    ]};
+    const root = convertCaptureToPencil(capture).root;
+    expect(root.children[0].children[0]).toMatchObject({type:"text",content:"+$4,200.00",fill:"#00BC7D"});
+    expect(root.children[1]).toMatchObject({type:"frame",fill:"#F0B100",width:8,height:8});
+  });
+
+  test("layers a transparent repeating gradient over its background color", () => {
+    const capture = {format:"pencil-capture-ir",version:1,rootPath:"0",label:"Live",source:{},nodes:[
+      {path:"0",parentPath:null,tag:"div",name:"media",text:null,rect:{x:0,y:0,width:320,height:180},attributes:{},styles:{...rootStyles,backgroundColor:"oklch(0.966 0.005 106.5)",backgroundImage:"repeating-linear-gradient(45deg, rgba(0, 0, 0, 0) 0px, rgba(0, 0, 0, 0) 10px, oklch(0.93 0.007 106.5) 10px, oklch(0.93 0.007 106.5) 11px)",overflow:"hidden"}},
+    ]};
+    const root = convertCaptureToPencil(capture).root;
+    expect(root.fill).toBe("#F4F4F0");
+    expect(root.children[0]).toMatchObject({type:"rectangle",name:"Div · media · Background image",fill:{type:"gradient"}});
   });
 
   test("expands repeating linear gradients into Pencil gradient stops", () => {

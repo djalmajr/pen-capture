@@ -4,6 +4,7 @@ import { isPageCaptureShortcut, pageCaptureModifier } from "../src/extension/sho
 import { createPencilClipboardHtml } from "../src/pencil-clipboard.mjs";
 import { fetchExtensionAsset } from "../src/extension/asset-fetch.mjs";
 import { effectiveFilter } from "../src/capture-element.mjs";
+import { waitForVisualStability } from "../src/extension/visual-stability.mjs";
 
 describe("extension clipboard contract", () => {
   test("encodes Pencil's native node clipboard envelope", () => {
@@ -52,6 +53,14 @@ describe("extension clipboard contract", () => {
     const root = {filter:"grayscale(1)",parentElement:null};
     const image = {filter:"brightness(0.6)",parentElement:root};
     expect(effectiveFilter(image,root,(node) => ({filter:node.filter}))).toBe("brightness(0.6) grayscale(1)");
+  });
+
+  test("waits until animated SVG geometry stops changing", async () => {
+    const signatures = ["arc-10","arc-30","arc-80","arc-80","arc-80"];
+    const result = await waitForVisualStability(() => signatures.shift() || "arc-80",{
+      intervalMs:0,stableSamples:2,timeoutMs:100,sleep:async () => {},
+    });
+    expect(result).toEqual({stable:true,signature:"arc-80"});
   });
 });
 

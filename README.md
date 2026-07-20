@@ -21,6 +21,8 @@ During serialization the toolbar collapses to `Capturing selection…` or `Captu
 
 Direct extension paste runs in Pencil-safe asset mode. Remote `http(s)` images remain image fills, redirects are resolved before the URL reaches Pencil, and the clipboard never contains `data:` image URLs: Pencil Desktop 1.1.70 treats non-HTTP image values as filesystem paths, so an embedded base64 URL opens a large asset-error alert. Supported `brightness()` and `grayscale()` filters become editable overlay layers; CSS color blend overlays become Pencil blend fills. Canvas snapshots have no durable browser URL and therefore become a transparent `Canvas · Materialization required` frame with diagnostic metadata.
 
+Before serialization, the extension waits for SVG geometry to stabilize so animated Recharts paths are not copied mid-transition. The color converter supports the computed `rgb()`, `oklab()`, `oklch()` and `lab()` forms used by current Tailwind/shadcn output, including small empty status bullets. Transparent CSS gradients are layered above their background color instead of replacing it.
+
 The neutral `*.capture.json` IR and conversion CLI remain available for diagnostics, repeatable MCP imports, and regression tests. They are no longer the extension's clipboard format.
 
 For durable, maximum-fidelity project captures, set `PENCIL_CAPTURE_MATERIALIZE_DIR` while running the clipboard smoke workflow or use the CLI/MCP import. Image and canvas fills are downloaded or decoded into project-local files, and the clipboard payload is rewritten to use paths relative to the `.pen` document. This is the required path when canvas pixels or filtered raster output must be preserved.

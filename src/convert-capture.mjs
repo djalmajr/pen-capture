@@ -20,6 +20,23 @@ function oklabToHex(lightness, a, b, alpha = 1) {
   return alpha < 1 ? `${hex}${channelToHex(alpha)}` : hex;
 }
 
+function labToHex(lightness, a, b, alpha = 1) {
+  const delta = 6/29;
+  const inverse = (value) => value > delta ? value**3 : 3*delta**2*(value-4/29);
+  const fy = (lightness+16)/116;
+  const x50 = 0.96422*inverse(fy+a/500);
+  const y50 = inverse(fy);
+  const z50 = 0.82521*inverse(fy-b/200);
+  const x = 0.9555766*x50-0.0230393*y50+0.0631636*z50;
+  const y = -0.0282895*x50+1.0099416*y50+0.0210077*z50;
+  const z = 0.0122982*x50-0.020483*y50+1.3299098*z50;
+  const red = linearToSrgb(3.2404542*x-1.5371385*y-0.4985314*z);
+  const green = linearToSrgb(-0.969266*x+1.8760108*y+0.041556*z);
+  const blue = linearToSrgb(0.0556434*x-0.2040259*y+1.0572252*z);
+  const hex = `#${channelToHex(red)}${channelToHex(green)}${channelToHex(blue)}`;
+  return alpha < 1 ? `${hex}${channelToHex(alpha)}` : hex;
+}
+
 function parseAlpha(value) {
   if (value == null) return 1;
   const number = Number.parseFloat(value);
@@ -44,6 +61,8 @@ export function cssColorToHex(value) {
   }
   const oklab = value.match(/^oklab\(\s*([\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)(?:\s*\/\s*([\d.%]+))?\s*\)$/i);
   if (oklab) return oklabToHex(Number(oklab[1]), Number(oklab[2]), Number(oklab[3]), parseAlpha(oklab[4]));
+  const lab = value.match(/^lab\(\s*([\d.]+)%?\s+(-?[\d.]+)\s+(-?[\d.]+)(?:\s*\/\s*([\d.%]+))?\s*\)$/i);
+  if (lab) return labToHex(Number(lab[1]),Number(lab[2]),Number(lab[3]),parseAlpha(lab[4]));
   throw new Error(`Unsupported CSS color: ${value}`);
 }
 
@@ -518,7 +537,7 @@ export function convertCaptureToPencil(capture, options = {}) {
     const frame = framed ? {
       type:"frame", name:semanticLayerName(node), layout:"none", layoutPosition:"absolute",
       ...frameRect, cornerRadius:cornerRadius(node.styles),
-      ...(backgroundFill ? {fill:blendMode ? {...backgroundFill,blendMode} : backgroundFill} : backgroundColor ? {fill:blendMode ? {type:"color",color:backgroundColor,blendMode} : backgroundColor} : {}),
+      ...(backgroundColor ? {fill:blendMode ? {type:"color",color:backgroundColor,blendMode} : backgroundColor} : backgroundFill ? {fill:blendMode ? {...backgroundFill,blendMode} : backgroundFill} : {}),
       ...border, ...(effects.length ? { effect:effects.length === 1 ? effects[0] : effects } : {}), ...(clipped ? { clip:true } : {}),
       ...(px(node.styles.opacity, 1) < 1 ? { opacity:round(px(node.styles.opacity, 1)) } : {}), children:[],
     } : {
@@ -526,6 +545,13 @@ export function convertCaptureToPencil(capture, options = {}) {
       ...(px(node.styles.opacity, 1) < 1 ? { opacity:round(px(node.styles.opacity, 1)) } : {}), children:[],
     };
     if (framed) stats.frames += 1; else stats.groups += 1;
+    if (backgroundFill && backgroundColor) {
+      frame.children.push({
+        type:"rectangle",name:`${semanticLayerName(node)} · Background image`,layoutPosition:"absolute",
+        x:0,y:0,width:frameRect.width,height:frameRect.height,cornerRadius:cornerRadius(node.styles),
+        fill:blendMode ? {...backgroundFill,blendMode} : backgroundFill,
+      });
+    }
     if (backgroundFill?.type === "image") stats.images += 1;
     if (backgroundFill?.type === "gradient") stats.gradients += 1;
     const textRuns = Array.isArray(node.textRuns)
