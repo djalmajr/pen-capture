@@ -1,0 +1,6 @@
+dist/
+node_modules/
+artifacts/
+*.capture.json
+*.pencil-tree.json
+.DS_Store

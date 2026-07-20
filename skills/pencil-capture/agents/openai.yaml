@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pencil Capture"
+  short_description: "Capture web UI as editable Pencil layers"
+  default_prompt: "Use $pencil-capture to capture a web element and import it into the active Pencil document."

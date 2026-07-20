@@ -1,0 +1,20 @@
+{
+  "format": "pencil-capture-catalog",
+  "version": 1,
+  "selector": "div.relative.bg-background > div.overflow-x-auto.overflow-y-hidden > div.flex.w-full > div.grid.grid-cols-7 > div > *",
+  "catalogs": [
+    {
+      "id": "preview-02",
+      "url": "https://ui.shadcn.com/preview/base/preview-02?preset=b1FS9AzhY&theme=amber&chartColor=amber&font=noto-sans&baseColor=olive&radius=small&template=vite&pointer=true",
+      "columns": [6, 5, 4, 5, 5, 5],
+      "visibleBlocks": 30
+    },
+    {
+      "id": "preview",
+      "url": "https://ui.shadcn.com/preview/base/preview?preset=b1FS9AzhY&item=preview&theme=amber&chartColor=amber&font=noto-sans&baseColor=olive&radius=small&template=vite&pointer=true",
+      "columns": [5, 4, 4, 5, 4, 5, 5],
+      "visibleBlocks": 31,
+      "hiddenIndexes": [2]
+    }
+  ]
+}

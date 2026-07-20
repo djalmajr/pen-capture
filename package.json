@@ -1,0 +1,16 @@
+{
+  "name": "pencil-capture",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "pencil-capture": "./bin/pencil-capture.mjs" },
+  "scripts": {
+    "build": "bun scripts/build-extension.mjs",
+    "capture:source": "bun scripts/capture-source-screenshot.mjs",
+    "compare:visual": "bun scripts/compare-visual.mjs",
+    "smoke:clipboard": "bun scripts/smoke-clipboard.mjs",
+    "smoke:picker": "bun scripts/smoke-picker.mjs",
+    "test": "bun test",
+    "verify": "bun test && bun scripts/build-extension.mjs"
+  }
+}

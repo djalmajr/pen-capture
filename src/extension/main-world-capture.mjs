@@ -1,0 +1,35 @@
+import { captureElementForPencil } from "../pencil-clipboard.mjs";
+
+export async function captureSelectionInMainWorld(targetSelector) {
+  const target = document.querySelector(targetSelector);
+  if (!(target instanceof Element)) throw new Error("The selected element is no longer available");
+
+  const { capture, html, converted } = await captureElementForPencil(target, {
+    selector: targetSelector,
+    url: globalThis.location.href,
+  });
+  const item = new ClipboardItem({
+    "text/html": new Blob([html], { type:"text/html" }),
+    "text/plain": new Blob([`Captured for Pencil: ${converted.root.name}`], { type:"text/plain" }),
+  });
+  await navigator.clipboard.write([item]);
+  const countNodes = (node) => 1 + (node.children || []).reduce((total, child) => total + countNodes(child), 0);
+  const capturedTags = Object.fromEntries(Object.entries(capture.nodes.reduce((counts, node) => {
+    counts[node.tag] = (counts[node.tag] || 0) + 1;
+    return counts;
+  }, {})).sort(([left], [right]) => left.localeCompare(right)));
+  const convertedTags = {};
+  const countConvertedTags = (node) => {
+    convertedTags[node.type] = (convertedTags[node.type] || 0) + 1;
+    for (const child of node.children || []) countConvertedTags(child);
+  };
+  countConvertedTags(converted.root);
+  return {
+    types:item.types,
+    nodeCount:countNodes(converted.root),
+    name:converted.root.name,
+    stats:converted.stats,
+    capturedTags,
+    convertedTags,
+  };
+}
