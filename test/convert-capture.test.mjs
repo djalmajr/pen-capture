@@ -117,8 +117,21 @@ describe("convertCaptureToPencil", () => {
       {path:"0",parentPath:null,tag:"div",name:"root",text:null,rect:{x:0,y:0,width:200,height:40},attributes:{},styles:rootStyles},
       {path:"0.0",parentPath:"0",tag:"a",name:"email settings",text:"email settings",textRect:{x:10,y:10,width:92,height:20},textRuns:[{text:"email settings",rect:{x:10,y:10,width:92,height:20}}],rect:{x:10,y:10,width:92,height:20},attributes:{href:"https://example.com/settings"},styles},
     ]};
-    const text = convertCaptureToPencil(capture).root.children[0].children[0];
-    expect(text).toMatchObject({content:"email settings",underline:true,href:"https://example.com/settings"});
+    const anchor = convertCaptureToPencil(capture).root.children[0];
+    expect(anchor.children[0]).toMatchObject({content:"email settings",underline:true,href:"https://example.com/settings",metadata:{type:"pencil-capture-link",href:"https://example.com/settings"}});
+    expect(anchor.children[1]).toMatchObject({type:"frame",name:"A · email settings · Underline",x:0,y:19,width:92,height:1,fill:"#0C0C09",metadata:{type:"pencil-capture-link-underline",href:"https://example.com/settings"}});
+  });
+
+  test("drops zero-geometry control shadows that Pencil would render with defaults", () => {
+    const styles = {...rootStyles,overflow:"clip",backgroundColor:"transparent",boxShadow:"rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklch(0.153 0.006 107.1) 0px 0px 0px 0px"};
+    const capture = {format:"pencil-capture-ir",version:1,rootPath:"0",label:"Input group",source:{},nodes:[
+      {path:"0",parentPath:null,tag:"div",name:"root",text:null,rect:{x:0,y:0,width:320,height:40},attributes:{},styles:rootStyles},
+      {path:"0.0",parentPath:"0",tag:"input",name:"input-group-control",text:null,rect:{x:1,y:4,width:280,height:32},attributes:{placeholder:"Name",placeholderColor:"rgb(124,124,103)",placeholderOpacity:"1"},styles},
+    ]};
+    const input = convertCaptureToPencil(capture).root.children[0];
+    expect(input.type).toBe("frame");
+    expect(input).not.toHaveProperty("effect");
+    expect(input).not.toHaveProperty("stroke");
   });
 
   test("keeps visible SVG descendants behind zero-sized responsive wrappers", () => {

@@ -195,7 +195,14 @@ function parseCssShadows(value) {
     if (!color) return [];
     const rest = shadow.replace(colorMatch[0], "");
     const numbers = Array.from(rest.matchAll(/(-?[\d.]+)px/g), (item) => Number(item[1]));
-    return [{ type:"shadow", shadowType:shadow.includes("inset") ? "inner" : "outer", offset:{ x:numbers[0] || 0, y:numbers[1] || 0 }, blur:Math.max(0, numbers[2] || 0), spread:numbers[3] || 0, color }];
+    const offset = {x:numbers[0] || 0,y:numbers[1] || 0};
+    const blur = Math.max(0,numbers[2] || 0);
+    const spread = numbers[3] || 0;
+    // CSS frameworks frequently reset controls with opaque zero-geometry
+    // shadows. Sending those to Pencil invokes its default shadow geometry
+    // and creates a visible border that does not exist in the browser.
+    if (offset.x === 0 && offset.y === 0 && blur === 0 && spread === 0) return [];
+    return [{ type:"shadow", shadowType:shadow.includes("inset") ? "inner" : "outer", offset, blur, spread, color }];
   });
 }
 
@@ -275,7 +282,21 @@ function makeText(node, parent, name = `${semanticLayerName(node)} · Text`, run
     fontStyle:node.styles.fontStyle || "normal", lineHeight:round(lineHeight / fontSize),
     textAlign:align, textAlignVertical:node.tag === "button" ? "middle" : "top",
     ...(String(node.styles.textDecorationLine || "").includes("underline") ? {underline:true} : {}),
-    ...(node.attributes.href ? {href:node.attributes.href} : {}),
+    ...(node.attributes.href ? {href:node.attributes.href,metadata:{type:"pencil-capture-link",href:node.attributes.href}} : {}),
+  };
+}
+
+function makeTextUnderline(node, parent, name = `${semanticLayerName(node)} · Underline`, run = null) {
+  if (!String(node.styles.textDecorationLine || "").includes("underline")) return null;
+  const sourceRect = run?.rect || node.textRect || node.rect;
+  const thicknessValue = px(node.styles.textDecorationThickness, 1);
+  const thickness = Math.max(1,round(thicknessValue));
+  return {
+    type:"frame",name,layout:"none",layoutPosition:"absolute",
+    x:round(sourceRect.x-parent.rect.x),y:round(sourceRect.y-parent.rect.y+sourceRect.height-thickness),
+    width:round(sourceRect.width),height:thickness,
+    fill:safeColor(node.styles.textDecorationColor) || safeColor(node.styles.color) || "#000000",
+    ...(node.attributes.href ? {metadata:{type:"pencil-capture-link-underline",href:node.attributes.href}} : {}),
   };
 }
 
@@ -449,15 +470,17 @@ export function convertCaptureToPencil(capture) {
       ? node.textRuns.filter((run) => run?.text && run.rect?.width > 0 && run.rect?.height > 0)
       : [];
     if (textRuns.length) {
-      textRuns.forEach((run, index) => frame.children.push(makeText(
-        node,
-        node,
-        `${semanticLayerName(node)} · Text${textRuns.length > 1 ? ` · Line ${index + 1}` : ""}`,
-        run,
-      )));
+      textRuns.forEach((run, index) => {
+        const suffix = textRuns.length > 1 ? ` · Line ${index + 1}` : "";
+        frame.children.push(makeText(node,node,`${semanticLayerName(node)} · Text${suffix}`,run));
+        const underline = makeTextUnderline(node,node,`${semanticLayerName(node)} · Underline${suffix}`,run);
+        if (underline) { frame.children.push(underline); stats.frames += 1; }
+      });
       stats.texts += textRuns.length;
     } else if (node.text && (!node.textRect || (node.textRect.width > 0 && node.textRect.height > 0))) {
       frame.children.push(makeText(node, node));
+      const underline = makeTextUnderline(node,node);
+      if (underline) { frame.children.push(underline); stats.frames += 1; }
       stats.texts += 1;
     }
     const control = controlText(node, node);

@@ -12,7 +12,7 @@ export const CAPTURED_STYLE_KEYS = [
   "borderTopLeftRadius", "borderTopRightRadius", "borderBottomRightRadius", "borderBottomLeftRadius",
   "fontFamily", "fontSize", "fontStyle", "fontWeight", "letterSpacing", "lineHeight",
   "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
-  "textAlign", "textTransform", "textDecorationLine", "textDecorationColor", "whiteSpace", "textOverflow", "opacity", "overflow", "visibility", "boxShadow",
+  "textAlign", "textTransform", "textDecorationLine", "textDecorationColor", "textDecorationThickness", "textUnderlineOffset", "whiteSpace", "textOverflow", "opacity", "overflow", "visibility", "boxShadow",
   "objectFit", "objectPosition", "filter",
   "fill", "fillOpacity", "stroke", "strokeWidth", "strokeOpacity", "strokeDasharray", "strokeDashoffset",
 ];

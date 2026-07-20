@@ -7,10 +7,10 @@ Status: technically validated; awaiting visual approval before starting `preview
 - Source: `https://ui.shadcn.com/preview/base/preview?preset=b1FS9AzhY&item=preview&theme=amber&chartColor=amber&font=noto-sans&baseColor=olive&radius=small&template=vite&pointer=true`
 - Source selector: `div.relative.bg-background > div.overflow-x-auto.overflow-y-hidden > div.flex.w-full > div.grid.grid-cols-7`
 - Pencil document: `examples.pen`
-- Pencil root: `shadcn · preview-01 · fidelity final (#O9lYr)`
+- Pencil root: `shadcn · preview-01 · fidelity final (#XKBeP)`
 - Source dimensions: `3000 × 1698`
 - Pencil dimensions: `3000 × 1698`
-- Reproduced normalized RMSE: `0.0720645`
+- Reproduced normalized RMSE: `0.0722065`
 
 ## Reproduction
 
@@ -23,13 +23,13 @@ bun run capture:source -- \
   artifacts/preview/source/source.png
 ```
 
-Export `#O9lYr` at scale `1` with Pencil MCP to `artifacts/preview/pencil/O9lYr.png`, then run:
+Export `#XKBeP` at scale `1` with Pencil MCP to `artifacts/preview/pencil/XKBeP.png`, then run:
 
 ```sh
 bun run compare:visual -- \
   artifacts/preview/source/source-v3.png \
-  artifacts/preview/pencil/O9lYr.png \
-  artifacts/preview/comparison-v6 \
+  artifacts/preview/pencil/XKBeP.png \
+  artifacts/preview/comparison-v7 \
   --require-same-size \
   --max-rmse 0.10
 ```
@@ -42,10 +42,10 @@ bun run compare:visual -- \
 - `<img>`, CSS background images and canvas content use project-local image fills.
 - No image fill uses a `data:` URL.
 - Every captured layer follows `Name (#ID)` using its actual Pencil ID.
-- Seven column-by-column visual audits show no collapsed, overlapping or missing visible content in `#O9lYr`.
+- Seven column-by-column visual audits show no collapsed, overlapping or missing visible content in `#XKBeP`.
 - The rendered source and Pencil export have identical dimensions.
 - Normalized RMSE is below the provisional `0.10` gate.
-- `bun run verify` passes `30/30` tests and builds the extension.
+- `bun run verify` passes `32/32` tests and builds the extension.
 
 ## Documented residual differences
 
@@ -66,7 +66,8 @@ These residuals account for the remaining pixel delta and do not currently produ
 - SVG `fill-opacity`, stroke scaling and dashed progress-circle circumference are preserved. Shapes with CSS `fill:none` receive an explicit transparent fill so Pencil does not apply its default solid fill.
 - Placeholder color comes from `::placeholder`, while input and textarea placement uses their computed padding.
 - Single-line form values are vertically centered from the control height and computed line height; textarea values retain their native top padding.
-- Anchor underlines and destinations are preserved, including inline links and card-footer links.
+- Anchor destinations are preserved in metadata. Underlines are materialized as editable 1 px layers because the current Pencil importer discards its native `underline` property.
+- Zero-geometry CSS shadows are discarded instead of invoking Pencil's default shadow, preventing phantom borders inside input groups with prepend/append content.
 - Dashed SVG progress circles are converted to open vector arc paths so Pencil does not draw the radial edges of a closed ellipse sector.
 - SVG text inside expanded Recharts `<g>` wrappers is positioned against the SVG viewport, keeping donut labels centered.
 - Filters inherited from image containers are materialized into local assets; the example's browser-rendered hero image is retained as a faithful local asset.
