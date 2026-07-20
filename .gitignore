@@ -4,3 +4,28 @@ artifacts/
 *.capture.json
 *.pencil-tree.json
 .DS_Store
+
+# Scratch screenshots and assets generated during capture iterations.
+/image.png
+/assets/captured/*
+
+# Assets referenced by the checked-in examples.pen preview.
+!/assets/captured/1433304e602a1bb08d46.png
+!/assets/captured/16e2a6d98280fe6eb421.png
+!/assets/captured/182b69f2b787c4124c24.png
+!/assets/captured/1f5c75a2f15451ebeff7.png
+!/assets/captured/28cf1f1d9c0ee5fb8f04.png
+!/assets/captured/326643aa041889a8891d.png
+!/assets/captured/5db04c965da83bcec7cb.png
+!/assets/captured/6b24bb42d4af3a0f9865.png
+!/assets/captured/79b47774f431fa79110d.png
+!/assets/captured/8014d9d47f6666224694.png
+!/assets/captured/8409578f41ee60e633d0.png
+!/assets/captured/84cba232dfcd88e2b1dc.png
+!/assets/captured/89a3f26e7d961addfa1c.png
+!/assets/captured/8a24a1239588e4762e91.png
+!/assets/captured/9ecfcbe8c0aa8c2c917d.png
+!/assets/captured/c04eac8694535ee4a0e8.png
+!/assets/captured/c1e4fb8988705c46b255.png
+!/assets/captured/e611f854b94932b4158a.png
+!/assets/captured/ed3bb4e59a580ecb46fa.png
