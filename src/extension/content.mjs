@@ -11,9 +11,9 @@ document.documentElement.setAttribute("data-pencil-capture-extension", "ready");
 globalThis.addEventListener(ASSET_REQUEST_EVENT, async (event) => {
   let request;
   try { request = JSON.parse(event.detail); } catch { return; }
-  const response = await chrome.runtime.sendMessage({type:"pencil-capture:fetch-asset",url:request.url});
+  const response = await chrome.runtime.sendMessage({type:"pencil-capture:fetch-asset",url:request.url,includeData:request.includeData === true});
   globalThis.dispatchEvent(new CustomEvent(ASSET_RESPONSE_EVENT, {
-    detail:JSON.stringify({id:request.id,dataUrl:response?.ok ? response.dataUrl : null}),
+    detail:JSON.stringify({id:request.id,dataUrl:response?.ok ? response.dataUrl : null,finalUrl:response?.ok ? response.finalUrl : null}),
   }));
 });
 

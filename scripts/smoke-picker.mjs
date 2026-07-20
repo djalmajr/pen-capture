@@ -14,7 +14,10 @@ try {
   await page.evaluate(() => {
     Object.defineProperty(globalThis, "chrome", {
       configurable:true,
-      value:{ runtime:{ getURL:(path) => `https://extension.invalid/${path}` } },
+      value:{ runtime:{
+        getURL:(path) => `https://extension.invalid/${path}`,
+        sendMessage:async (message) => ({ok:true,finalUrl:message.url,dataUrl:null}),
+      } },
     });
   });
   await page.addScriptTag({ path:new URL("dist/extension/content.js", root).pathname });

@@ -255,13 +255,26 @@ describe("convertCaptureToPencil", () => {
     const styles = {...rootStyles,backgroundColor:"transparent",backgroundImage:"none",objectFit:"cover"};
     const capture = {format:"pencil-capture-ir",version:1,rootPath:"0",label:"Portable",source:{url:"https://example.com/page"},nodes:[
       {path:"0",parentPath:null,tag:"div",name:"root",text:null,rect:{x:0,y:0,width:320,height:180},attributes:{},styles:rootStyles},
-      {path:"0.0",parentPath:"0",tag:"img",name:"photo",text:null,rect:{x:10,y:10,width:120,height:80},attributes:{currentSrc:"https://cdn.example.com/photo.png",dataUrl:"data:image/png;base64,AAAA",effectiveFilter:"grayscale(1)"},styles},
+      {path:"0.0",parentPath:"0",tag:"img",name:"photo",text:null,rect:{x:10,y:10,width:120,height:80},attributes:{currentSrc:"https://github.com/example.png",resolvedSrc:"https://avatars.githubusercontent.com/u/1?v=4",dataUrl:"data:image/png;base64,AAAA",effectiveFilter:"brightness(0.6) grayscale(1)"},styles},
       {path:"0.1",parentPath:"0",tag:"canvas",name:"waveform",text:null,rect:{x:10,y:100,width:280,height:60},attributes:{dataUrl:"data:image/png;base64,BBBB"},styles},
     ]};
     const root = convertCaptureToPencil(capture,{allowEmbeddedAssets:false}).root;
-    expect(root.children[0]).toMatchObject({type:"rectangle",fill:{type:"image",url:"https://cdn.example.com/photo.png"},metadata:{type:"pencil-capture-image",filter:"grayscale(1)"}});
+    expect(root.children[0]).toMatchObject({type:"frame",clip:true,metadata:{type:"pencil-capture-image-filter",filter:"brightness(0.6) grayscale(1)"}});
+    expect(root.children[0].children[0]).toMatchObject({type:"rectangle",fill:{type:"image",url:"https://avatars.githubusercontent.com/u/1?v=4"}});
+    expect(root.children[0].children[1]).toMatchObject({fill:{type:"color",blendMode:"saturation"}});
+    expect(root.children[0].children[2]).toMatchObject({fill:"#00000066"});
     expect(root.children[1]).toMatchObject({type:"frame",name:"Canvas · Materialization required",metadata:{type:"pencil-capture-unmaterialized-canvas",reason:"embedded-assets-disabled"}});
     expect(JSON.stringify(root)).not.toContain("data:image/");
+  });
+
+  test("preserves a CSS color blend overlay as an editable Pencil fill", () => {
+    const capture = {format:"pencil-capture-ir",version:1,rootPath:"0",label:"Filtered hero",source:{},nodes:[
+      {path:"0",parentPath:null,tag:"div",name:"root",text:null,rect:{x:0,y:0,width:320,height:180},attributes:{},styles:rootStyles},
+      {path:"0.0",parentPath:"0",tag:"div",name:"color overlay",text:null,rect:{x:0,y:0,width:320,height:180},attributes:{},styles:{...rootStyles,backgroundColor:"oklch(0.555 0.163 48.998)",mixBlendMode:"color",opacity:"0.5"}},
+    ]};
+    expect(convertCaptureToPencil(capture).root.children[0]).toMatchObject({
+      type:"frame",opacity:0.5,fill:{type:"color",color:"#BB4D00",blendMode:"color"},
+    });
   });
 
   test("expands repeating linear gradients into Pencil gradient stops", () => {

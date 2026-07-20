@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { isPageCaptureShortcut, pageCaptureModifier } from "../src/extension/shortcuts.mjs";
 import { createPencilClipboardHtml } from "../src/pencil-clipboard.mjs";
+import { fetchExtensionAsset } from "../src/extension/asset-fetch.mjs";
+import { effectiveFilter } from "../src/capture-element.mjs";
 
 describe("extension clipboard contract", () => {
   test("encodes Pencil's native node clipboard envelope", () => {
@@ -27,6 +29,29 @@ describe("extension clipboard contract", () => {
   test("disables embedded assets in the direct extension paste path", async () => {
     const source = await readFile(new URL("../src/extension/main-world-capture.mjs", import.meta.url), "utf8");
     expect(source).toContain("allowEmbeddedAssets:false");
+  });
+
+  test("resolves redirected image URLs before Pencil receives them", async () => {
+    const content = await readFile(new URL("../src/extension/content.mjs", import.meta.url), "utf8");
+    const calls = [];
+    const result = await fetchExtensionAsset("https://github.com/example.png",{fetchImpl:async (url,options) => {
+      calls.push({url,options});
+      return {ok:true,status:200,url:"https://avatars.githubusercontent.com/u/1?v=4"};
+    }});
+    expect(calls).toEqual([{url:"https://github.com/example.png",options:{method:"HEAD"}}]);
+    expect(result).toEqual({finalUrl:"https://avatars.githubusercontent.com/u/1?v=4",dataUrl:null});
+    expect(content).toContain("finalUrl:response?.ok ? response.finalUrl : null");
+  });
+
+  test("captures CSS blend modes for editable visual overlays", async () => {
+    const capture = await readFile(new URL("../src/capture-element.mjs", import.meta.url), "utf8");
+    expect(capture).toContain('"mixBlendMode"');
+  });
+
+  test("combines an image's own filter with inherited filters", () => {
+    const root = {filter:"grayscale(1)",parentElement:null};
+    const image = {filter:"brightness(0.6)",parentElement:root};
+    expect(effectiveFilter(image,root,(node) => ({filter:node.filter}))).toBe("brightness(0.6) grayscale(1)");
   });
 });
 

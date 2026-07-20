@@ -19,7 +19,7 @@ The toolbar fades while the pointer is over it so content underneath remains sel
 
 During serialization the toolbar collapses to `Capturing selection…` or `Capturing page…`. It only shows `Copied to clipboard. Ready to paste into Pencil.` after the browser confirms that the `text/html` payload was written.
 
-Direct extension paste runs in Pencil-safe asset mode. Remote `http(s)` images remain image fills, but the clipboard never contains `data:` image URLs: Pencil Desktop 1.1.70 treats non-HTTP image values as filesystem paths, so an embedded base64 URL opens a large asset-error alert. Canvas snapshots have no durable browser URL and therefore become a transparent `Canvas · Materialization required` frame with diagnostic metadata. Browser-only image filters are retained as metadata, although Pencil may not render the filter in direct mode.
+Direct extension paste runs in Pencil-safe asset mode. Remote `http(s)` images remain image fills, redirects are resolved before the URL reaches Pencil, and the clipboard never contains `data:` image URLs: Pencil Desktop 1.1.70 treats non-HTTP image values as filesystem paths, so an embedded base64 URL opens a large asset-error alert. Supported `brightness()` and `grayscale()` filters become editable overlay layers; CSS color blend overlays become Pencil blend fills. Canvas snapshots have no durable browser URL and therefore become a transparent `Canvas · Materialization required` frame with diagnostic metadata.
 
 The neutral `*.capture.json` IR and conversion CLI remain available for diagnostics, repeatable MCP imports, and regression tests. They are no longer the extension's clipboard format.
 

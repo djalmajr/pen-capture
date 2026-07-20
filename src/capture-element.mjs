@@ -13,7 +13,7 @@ export const CAPTURED_STYLE_KEYS = [
   "fontFamily", "fontSize", "fontStyle", "fontWeight", "letterSpacing", "lineHeight",
   "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
   "textAlign", "textTransform", "textDecorationLine", "textDecorationColor", "textDecorationThickness", "textUnderlineOffset", "whiteSpace", "textOverflow", "opacity", "overflow", "visibility", "boxShadow",
-  "objectFit", "objectPosition", "filter",
+  "objectFit", "objectPosition", "filter", "mixBlendMode",
   "fill", "fillOpacity", "stroke", "strokeWidth", "strokeOpacity", "strokeDasharray", "strokeDashoffset",
 ];
 
@@ -27,7 +27,7 @@ const CAPTURED_ATTRIBUTES = new Set([
 const EXTENSION_ASSET_REQUEST = "pencil-capture:asset-request";
 const EXTENSION_ASSET_RESPONSE = "pencil-capture:asset-response";
 
-function requestExtensionAsset(url) {
+function requestExtensionAsset(url, includeData = false) {
   if (!document.documentElement.hasAttribute("data-pencil-capture-extension")) return Promise.resolve(null);
   const id = crypto.randomUUID();
   return new Promise((resolve) => {
@@ -35,7 +35,7 @@ function requestExtensionAsset(url) {
     const onResponse = (event) => {
       let response;
       try { response = JSON.parse(event.detail); } catch { return; }
-      if (response?.id === id) finish(response.dataUrl || null);
+      if (response?.id === id) finish({dataUrl:response.dataUrl || null,finalUrl:response.finalUrl || null});
     };
     const finish = (value) => {
       clearTimeout(timeout);
@@ -43,7 +43,7 @@ function requestExtensionAsset(url) {
       resolve(value);
     };
     globalThis.addEventListener(EXTENSION_ASSET_RESPONSE, onResponse);
-    globalThis.dispatchEvent(new CustomEvent(EXTENSION_ASSET_REQUEST, {detail:JSON.stringify({id,url})}));
+    globalThis.dispatchEvent(new CustomEvent(EXTENSION_ASSET_REQUEST, {detail:JSON.stringify({id,url,includeData})}));
   });
 }
 
@@ -67,14 +67,14 @@ function canvasSnapshot(node) {
   return output.toDataURL("image/png");
 }
 
-function effectiveFilter(node, root) {
+export function effectiveFilter(node, root, styleOf = getComputedStyle) {
   const filters = [];
-  for (let current = node.parentElement; current instanceof Element; current = current.parentElement) {
-    const filter = getComputedStyle(current).filter;
+  for (let current = node; current; current = current.parentElement) {
+    const filter = styleOf(current).filter;
     if (filter && filter !== "none") filters.push(filter);
     if (current === root) break;
   }
-  return filters.reverse().join(" ") || "none";
+  return filters.join(" ") || "none";
 }
 
 function filteredImageSnapshot(node, computed, rect, filter = computed.filter) {
@@ -107,14 +107,17 @@ function filteredImageSnapshot(node, computed, rect, filter = computed.filter) {
 async function fetchedFilteredImageSnapshot(node, captured) {
   const url = node.currentSrc || node.src;
   let blob;
+  let resolvedSrc = url;
   try {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Unable to fetch filtered image: ${response.status}`);
     blob = await response.blob();
+    resolvedSrc = response.url || url;
   } catch (error) {
-    const bridged = await requestExtensionAsset(url);
-    if (!bridged) throw error;
-    blob = await (await fetch(bridged)).blob();
+    const bridged = await requestExtensionAsset(url, true);
+    if (!bridged?.dataUrl) throw error;
+    blob = await (await fetch(bridged.dataUrl)).blob();
+    resolvedSrc = bridged.finalUrl || url;
   }
   const bitmap = await createImageBitmap(blob);
   try {
@@ -140,7 +143,7 @@ async function fetchedFilteredImageSnapshot(node, captured) {
       const drawHeight = bitmap.height * scale;
       context.drawImage(bitmap, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
     }
-    return output.toDataURL("image/png");
+    return {dataUrl:output.toDataURL("image/png"),resolvedSrc};
   } finally {
     bitmap.close?.();
   }
@@ -151,9 +154,21 @@ export async function hydrateFilteredImageAssets(capture, root) {
   const visit = async (node, path) => {
     const captured = byPath.get(path);
     const filter = captured?.attributes.effectiveFilter ?? captured?.styles.filter;
-    if (node.tagName === "IMG" && filter && filter !== "none" && !captured.attributes.dataUrl) {
-      captured.styles.filter = filter;
-      try { captured.attributes.dataUrl = await fetchedFilteredImageSnapshot(node, captured); } catch { captured.attributes.dataUrl = null; }
+    if (node.tagName === "IMG" && captured) {
+      const source = node.currentSrc || node.src;
+      if (filter && filter !== "none" && !captured.attributes.dataUrl) {
+        captured.styles.filter = filter;
+        try {
+          const result = await fetchedFilteredImageSnapshot(node, captured);
+          captured.attributes.dataUrl = result.dataUrl;
+          captured.attributes.resolvedSrc = result.resolvedSrc;
+        } catch { captured.attributes.dataUrl = null; }
+      } else if (source) {
+        try {
+          const result = await requestExtensionAsset(source, false);
+          captured.attributes.resolvedSrc = result?.finalUrl || source;
+        } catch { captured.attributes.resolvedSrc = source; }
+      }
     }
     await Promise.all(Array.from(node.children).map((child, index) => visit(child, `${path}.${index}`)));
   };

@@ -342,6 +342,40 @@ function imageMode(node) {
   return node.styles.objectFit === "contain" ? "fit" : node.styles.objectFit === "cover" ? "fill" : "stretch";
 }
 
+function pencilBlendMode(value) {
+  const modes = new Map([
+    ["normal","normal"],["darken","darken"],["multiply","multiply"],["color-burn","colorBurn"],
+    ["lighten","light"],["screen","screen"],["color-dodge","colorDodge"],["overlay","overlay"],
+    ["soft-light","softLight"],["hard-light","hardLight"],["difference","difference"],["exclusion","exclusion"],
+    ["hue","hue"],["saturation","saturation"],["color","color"],["luminosity","luminosity"],
+  ]);
+  return modes.get(value) || null;
+}
+
+function filterAmount(filter, name) {
+  const value = filter?.match(new RegExp(`${name}\\(([^)]+)\\)`,`i`))?.[1]?.trim();
+  if (!value) return null;
+  const amount = value.endsWith("%") ? Number(value.slice(0,-1)) / 100 : Number(value);
+  return Number.isFinite(amount) ? amount : null;
+}
+
+function filteredImageNode(node, parent, url) {
+  const rect = relativeRect(node,parent);
+  const filter = node.attributes.effectiveFilter && node.attributes.effectiveFilter !== "none"
+    ? node.attributes.effectiveFilter
+    : node.styles.filter;
+  const grayscale = filterAmount(filter,"grayscale");
+  const brightness = filterAmount(filter,"brightness");
+  const darkened = Number.isFinite(brightness) && brightness >= 0 && brightness < 1;
+  if (!(grayscale > 0) && !darkened) {
+    return {type:"rectangle",name:semanticLayerName(node),layoutPosition:"absolute",...rect,fill:{type:"image",url,mode:imageMode(node)},cornerRadius:cornerRadius(node.styles),...(filter && filter !== "none" ? {metadata:{type:"pencil-capture-image",filter}} : {})};
+  }
+  const children = [{type:"rectangle",name:`${semanticLayerName(node)} · Source`,layoutPosition:"absolute",x:0,y:0,width:rect.width,height:rect.height,fill:{type:"image",url,mode:imageMode(node)}}];
+  if (grayscale > 0) children.push({type:"rectangle",name:`${semanticLayerName(node)} · Grayscale`,layoutPosition:"absolute",x:0,y:0,width:rect.width,height:rect.height,fill:{type:"color",color:`#808080${Math.round(Math.min(1,grayscale)*255).toString(16).padStart(2,"0").toUpperCase()}`,blendMode:"saturation"}});
+  if (darkened) children.push({type:"rectangle",name:`${semanticLayerName(node)} · Brightness`,layoutPosition:"absolute",x:0,y:0,width:rect.width,height:rect.height,fill:`#000000${Math.round((1-brightness)*255).toString(16).padStart(2,"0").toUpperCase()}`});
+  return {type:"frame",name:semanticLayerName(node),layout:"none",layoutPosition:"absolute",...rect,clip:true,cornerRadius:cornerRadius(node.styles),metadata:{type:"pencil-capture-image-filter",filter},children};
+}
+
 function svgGraphic(node, parent, byPath) {
   let svg = node;
   while (svg && svg.tag !== "svg") svg = byPath.get(svg.parentPath);
@@ -449,8 +483,8 @@ export function convertCaptureToPencil(capture, options = {}) {
     if (node.tag === "img" || node.tag === "canvas") {
       const allowEmbeddedAssets = options.allowEmbeddedAssets !== false;
       const url = allowEmbeddedAssets
-        ? node.attributes.assetUrl || node.attributes.dataUrl || node.attributes.currentSrc || node.attributes.src
-        : absoluteHttpUrl(node.attributes.currentSrc || node.attributes.src || node.attributes.assetUrl,capture.source?.url);
+        ? node.attributes.assetUrl || node.attributes.dataUrl || node.attributes.resolvedSrc || node.attributes.currentSrc || node.attributes.src
+        : absoluteHttpUrl(node.attributes.resolvedSrc || node.attributes.currentSrc || node.attributes.src || node.attributes.assetUrl,capture.source?.url);
       if (!url && node.tag === "canvas" && !allowEmbeddedAssets) {
         stats.frames += 1;
         return {
@@ -460,11 +494,12 @@ export function convertCaptureToPencil(capture, options = {}) {
       }
       if (!url) { stats.skipped += 1; return null; }
       stats.images += 1;
-      const filter = node.attributes.effectiveFilter;
-      return { type:"rectangle", name:semanticLayerName(node), layoutPosition:"absolute", ...relativeRect(node, parent), fill:{ type:"image", url, mode:node.tag === "img" ? imageMode(node) : "stretch" }, cornerRadius:cornerRadius(node.styles), ...(filter && filter !== "none" ? {metadata:{type:"pencil-capture-image",filter}} : {}) };
+      if (node.tag === "img") return filteredImageNode(node,parent,url);
+      return {type:"rectangle",name:semanticLayerName(node),layoutPosition:"absolute",...relativeRect(node,parent),fill:{type:"image",url,mode:"stretch"},cornerRadius:cornerRadius(node.styles)};
     }
     const backgroundFill = cssBackgroundToFill(node,{allowEmbeddedAssets:options.allowEmbeddedAssets !== false,baseUrl:capture.source?.url});
     const backgroundColor = safeColor(node.styles.backgroundColor);
+    const blendMode = pencilBlendMode(node.styles.mixBlendMode);
     const shadows = parseCssShadows(node.styles.boxShadow);
     const border = Object.keys(borderProperties(node.styles)).length ? borderProperties(node.styles) : shadowRingBorder(shadows);
     const effects = shadows.filter((shadow) => !(border.stroke === shadow.color && border.strokeWidth === shadow.spread && shadow.offset.x === 0 && shadow.offset.y === 0 && shadow.blur === 0));
@@ -483,7 +518,7 @@ export function convertCaptureToPencil(capture, options = {}) {
     const frame = framed ? {
       type:"frame", name:semanticLayerName(node), layout:"none", layoutPosition:"absolute",
       ...frameRect, cornerRadius:cornerRadius(node.styles),
-      ...(backgroundFill ? { fill:backgroundFill } : backgroundColor ? { fill:backgroundColor } : {}),
+      ...(backgroundFill ? {fill:blendMode ? {...backgroundFill,blendMode} : backgroundFill} : backgroundColor ? {fill:blendMode ? {type:"color",color:backgroundColor,blendMode} : backgroundColor} : {}),
       ...border, ...(effects.length ? { effect:effects.length === 1 ? effects[0] : effects } : {}), ...(clipped ? { clip:true } : {}),
       ...(px(node.styles.opacity, 1) < 1 ? { opacity:round(px(node.styles.opacity, 1)) } : {}), children:[],
     } : {
