@@ -14,11 +14,7 @@ export async function captureSelectionInMainWorld(targetSelector, sourceSelector
     // fetchable source URLs; the CLI/MCP workflow materializes embedded assets.
     allowEmbeddedAssets:false,
   });
-  const item = new ClipboardItem({
-    "text/html": new Blob([html], { type:"text/html" }),
-    "text/plain": new Blob([`Captured for Pencil: ${converted.root.name}`], { type:"text/plain" }),
-  });
-  await navigator.clipboard.write([item]);
+  const plain = `Captured for Pencil: ${converted.root.name}`;
   const countNodes = (node) => 1 + (node.children || []).reduce((total, child) => total + countNodes(child), 0);
   const capturedTags = Object.fromEntries(Object.entries(capture.nodes.reduce((counts, node) => {
     counts[node.tag] = (counts[node.tag] || 0) + 1;
@@ -31,7 +27,9 @@ export async function captureSelectionInMainWorld(targetSelector, sourceSelector
   };
   countConvertedTags(converted.root);
   return {
-    types:item.types,
+    types:["text/html", "text/plain"],
+    html,
+    plain,
     nodeCount:countNodes(converted.root),
     name:converted.root.name,
     stats:converted.stats,

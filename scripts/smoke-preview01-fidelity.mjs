@@ -16,9 +16,9 @@ try {
   await page.evaluate(async () => { if (document.fonts?.ready) await document.fonts.ready; });
   await page.locator(selector).waitFor({state:"visible",timeout:30_000});
   await page.addScriptTag({path:new URL("../dist/extension/bridge.js",import.meta.url).pathname});
-  await page.evaluate(async (targetSelector) => {
+  const capture = await page.evaluate(async (targetSelector) => {
     const id = crypto.randomUUID();
-    await new Promise((resolve,reject) => {
+    return new Promise((resolve,reject) => {
       const timeout = setTimeout(() => reject(new Error("Capture bridge timed out")),60_000);
       const listener = (event) => {
         const response = JSON.parse(event.detail);
@@ -31,14 +31,11 @@ try {
       globalThis.dispatchEvent(new CustomEvent("pencil-capture:copy-request",{detail:JSON.stringify({id,selector:targetSelector})}));
     });
   },selector);
-  const root = await page.evaluate(async () => {
-    const items = await navigator.clipboard.read();
-    const item = items.find((candidate) => candidate.types.includes("text/html"));
-    const html = item ? await (await item.getType("text/html")).text() : "";
+  const root = await page.evaluate((html) => {
     const encoded = html.match(/data-pen-node-clipboard="([^"]+)"/)?.[1];
     if (!encoded) throw new Error("Pencil clipboard marker is missing");
     return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(encoded),(character) => character.charCodeAt(0)))).remoteData.nodes[0];
-  });
+  },capture.html);
   const text = flatten(root).filter((node) => node.type === "text").map((node) => node.content);
   for (const titlePart of ["Nova", "-", "Noto Sans"]) {
     if (!text.includes(titlePart)) throw new Error(`Editable title run was merged or lost: ${JSON.stringify(text)}`);

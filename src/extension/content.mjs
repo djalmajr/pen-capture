@@ -8,6 +8,8 @@ const RESPONSE_EVENT = "pencil-capture:copy-response";
 const ASSET_REQUEST_EVENT = "pencil-capture:asset-request";
 const ASSET_RESPONSE_EVENT = "pencil-capture:asset-response";
 const TARGET_ATTRIBUTE = "data-pencil-capture-target";
+const FRAME_ACTIVITY_MESSAGE = "pencil-capture:frame-activity";
+const FRAME_CANCEL_MESSAGE = "pencil-capture:frame-cancel";
 
 document.documentElement.setAttribute("data-pencil-capture-extension", "ready");
 globalThis.addEventListener(ASSET_REQUEST_EVENT, async (event) => {
@@ -75,6 +77,7 @@ function selectorFor(element) {
 
 function install() {
   if (globalThis[CONTROLLER_KEY]) return globalThis[CONTROLLER_KEY].toggle();
+  const isEmbeddedDocument = globalThis.top !== globalThis;
   const pageModifier = pageCaptureModifier(navigator.platform);
   const host = document.createElement("div");
   host.id = "__pencil_capture_host__";
@@ -84,6 +87,7 @@ function install() {
       :host { all: initial; }
       .toolbar { position: fixed; z-index: 2147483647; top: 16px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; min-height: 44px; box-sizing:border-box; overflow:hidden; padding: 7px 14px 7px 12px; border: 1px solid rgba(15,23,42,.18); border-radius: 12px; background: rgba(255,255,255,.96); box-shadow: 0 10px 28px rgba(15,23,42,.18),0 1px 2px rgba(15,23,42,.10); color: #262626; font: 14px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; white-space: nowrap; transition: opacity 90ms ease,width 140ms ease; }
       .toolbar.pass-through { opacity: 0; pointer-events: none; }
+      .toolbar.frame-inactive { opacity: 0; pointer-events: none; }
       .capture-progress { position:absolute; z-index:0; inset:0; transform:scaleX(0); transform-origin:left center; background:#ECECEA; opacity:0; pointer-events:none; transition:transform 90ms linear,opacity 90ms ease; }
       .toolbar.is-capturing .capture-progress { opacity:1; }
       .view { position:relative; z-index:1; display:flex; align-items:center; gap:12px; }
@@ -142,6 +146,7 @@ function install() {
   let progressAnimationFrame;
   let selectionSelector = "body";
   let lastPointer = null;
+  toolbar.classList.toggle("frame-inactive", isEmbeddedDocument);
 
   function showView(nextPhase) {
     phase = nextPhase;
@@ -178,22 +183,48 @@ function install() {
 
   function updateOutline() {
     const target = selection.current;
-    if (!target || target === host) return outline.style.display = "none";
+    if (!target || target === host || toolbar.classList.contains("frame-inactive")) return outline.style.display = "none";
     const rect = target.getBoundingClientRect();
     Object.assign(outline.style, { display:"block", left:`${rect.left}px`, top:`${rect.top}px`, width:`${rect.width}px`, height:`${rect.height}px` });
   }
 
   function onPointerMove(event) {
     if (!active || phase !== "selection") return;
+    toolbar.classList.remove("frame-inactive");
+    if (isEmbeddedDocument) globalThis.top.postMessage({type:FRAME_ACTIVITY_MESSAGE}, "*");
     lastPointer = {x:event.clientX,y:event.clientY};
     const rect = toolbar.getBoundingClientRect();
     const overToolbar = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
     toolbar.classList.toggle("pass-through", overToolbar);
     const target = document.elementFromPoint(event.clientX, event.clientY);
+    if (target?.matches?.("iframe,frame")) {
+      toolbar.classList.add("frame-inactive");
+      outline.style.display = "none";
+      return;
+    }
     if (target && target !== host && !host.contains(target)) {
       setHoveredTarget(selection, target);
       selectionSelector = selectorFor(target);
       updateOutline();
+    }
+  }
+
+  function broadcastFrameCancel() {
+    for (let index = 0; index < globalThis.frames.length; index += 1) {
+      globalThis.frames[index].postMessage({type:FRAME_CANCEL_MESSAGE}, "*");
+    }
+  }
+
+  function onFrameMessage(event) {
+    if (!active || event.source === globalThis) return;
+    if (event.data?.type === FRAME_CANCEL_MESSAGE) {
+      broadcastFrameCancel();
+      teardown();
+      return;
+    }
+    if (!isEmbeddedDocument && event.data?.type === FRAME_ACTIVITY_MESSAGE) {
+      toolbar.classList.add("frame-inactive");
+      outline.style.display = "none";
     }
   }
 
@@ -232,11 +263,19 @@ function install() {
     const remainingCapturingTime = minimumCapturingTime - (performance.now() - capturingStartedAt);
     if (remainingCapturingTime > 0) await new Promise((resolve) => setTimeout(resolve, remainingCapturingTime));
     if (!active) return;
-    if (!response?.ok) {
+    let completion = response;
+    if (response?.ok) {
+      completion = await chrome.runtime.sendMessage({
+        type:"pencil-capture:write-clipboard",
+        html:response.html,
+        plain:response.plain,
+      });
+    }
+    if (!completion?.ok) {
       stopCaptureProgress();
       toolbar.classList.remove("is-capturing");
       capturingPercentage.hidden = true;
-      capturingMessage.textContent = response?.error || "Could not copy design";
+      capturingMessage.textContent = completion?.error || "Could not copy design";
       return;
     }
     stopCaptureProgress(100);
@@ -258,6 +297,8 @@ function install() {
     if (event.key === "Escape" || event.key === "Esc" || event.keyCode === 27) {
       event.preventDefault();
       event.stopImmediatePropagation();
+      if (isEmbeddedDocument) globalThis.top.postMessage({type:FRAME_CANCEL_MESSAGE}, "*");
+      else broadcastFrameCancel();
       teardown();
       return true;
     }
@@ -280,6 +321,7 @@ function install() {
     document.removeEventListener("click", onClick, true);
     document.removeEventListener("keydown", onKeyDown, true);
     globalThis.removeEventListener("keydown", cancelFromKeyboard, true);
+    globalThis.removeEventListener("message", onFrameMessage);
     host.remove();
     delete globalThis[CONTROLLER_KEY];
   }
@@ -288,6 +330,7 @@ function install() {
   document.addEventListener("click", onClick, true);
   document.addEventListener("keydown", onKeyDown, true);
   globalThis.addEventListener("keydown", cancelFromKeyboard, true);
+  globalThis.addEventListener("message", onFrameMessage);
   updateOutline();
   globalThis[CONTROLLER_KEY] = { toggle: teardown, teardown };
 }

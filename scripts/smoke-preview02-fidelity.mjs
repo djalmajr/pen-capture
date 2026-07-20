@@ -21,9 +21,9 @@ try {
 
   const capture = async (selector) => {
     await page.locator(selector).waitFor({state:"visible",timeout:30_000});
-    await page.evaluate(async (targetSelector) => {
+    const response = await page.evaluate(async (targetSelector) => {
       const id = crypto.randomUUID();
-      await new Promise((resolve,reject) => {
+      return new Promise((resolve,reject) => {
         const timeout = setTimeout(() => reject(new Error("Capture bridge timed out")),60_000);
         const listener = (event) => {
           const response = JSON.parse(event.detail);
@@ -36,14 +36,11 @@ try {
         globalThis.dispatchEvent(new CustomEvent("pencil-capture:copy-request",{detail:JSON.stringify({id,selector:targetSelector})}));
       });
     },selector);
-    return page.evaluate(async () => {
-      const items = await navigator.clipboard.read();
-      const item = items.find((candidate) => candidate.types.includes("text/html"));
-      const html = item ? await (await item.getType("text/html")).text() : "";
+    return page.evaluate((html) => {
       const encoded = html.match(/data-pen-node-clipboard="([^"]+)"/)?.[1];
       if (!encoded) throw new Error("Pencil clipboard marker is missing");
       return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(encoded),(character) => character.charCodeAt(0)))).remoteData.nodes[0];
-    });
+    },response.html);
   };
 
   const stock = await capture(selectors.stock);

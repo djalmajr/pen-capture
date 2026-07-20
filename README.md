@@ -19,6 +19,8 @@ The toolbar fades while the pointer is over it so content underneath remains sel
 
 The picker follows live DOM updates between hover and click. It recovers a selected element after a framework rerender and uses a short-lived private marker to preserve the exact node across Chrome's isolated and main execution worlds.
 
+Capture mode is installed in every accessible frame. Entering an iframe activates its local picker and hides the parent picker, so selection, keyboard navigation and capture operate against the iframe's own DOM without stacked toolbars. Clipboard writing is delegated to a private offscreen extension document, which also supports cross-origin frames whose page-level clipboard policy would otherwise reject the capture. The payload remains inside the extension and is not transmitted.
+
 During serialization the toolbar collapses to `Capturing selection…` or `Capturing page…`. A neutral background fill and percentage advance while the capture is running, stop below completion until the real work finishes, and reach `100%` only after the browser confirms that the `text/html` payload was written. The toolbar then switches to `Copied to clipboard. Ready to paste into Pencil.`.
 
 Direct extension paste runs in Pencil-safe asset mode. Remote `http(s)` images remain image fills, redirects are resolved before the URL reaches Pencil, and the clipboard never contains `data:` image URLs: Pencil Desktop 1.1.70 treats non-HTTP image values as filesystem paths, so an embedded base64 URL opens a large asset-error alert. Supported `brightness()` and `grayscale()` filters become editable overlay layers; CSS color blend overlays become Pencil blend fills. Canvas snapshots have no durable browser URL and therefore become a transparent `Canvas · Materialization required` frame with diagnostic metadata.
@@ -45,6 +47,8 @@ After rebuilding, reload the unpacked extension in `chrome://extensions` before 
 ```sh
 bun test
 bun run build
+bun run smoke:iframe
+bun run smoke:extension-iframe
 ```
 
 Load `dist/extension` as an unpacked extension from `chrome://extensions`.

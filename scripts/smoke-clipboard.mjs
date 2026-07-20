@@ -47,6 +47,12 @@ try {
       }));
     });
   }, selector);
+  await page.evaluate(async ({html, plain}) => {
+    await navigator.clipboard.write([new ClipboardItem({
+      "text/html":new Blob([html], {type:"text/html"}),
+      "text/plain":new Blob([plain], {type:"text/plain"}),
+    })]);
+  },capture);
   const result = await page.evaluate(async () => {
     const items = await navigator.clipboard.read();
     const summary = [];
@@ -97,7 +103,10 @@ try {
     result.rewritten = rewritten;
   }
   delete result.html;
-  console.log(JSON.stringify({ url, selector, capture, materialized, ...result }));
+  const captureSummary = {...capture, htmlBytes:new Blob([capture.html]).size};
+  delete captureSummary.html;
+  delete captureSummary.plain;
+  console.log(JSON.stringify({ url, selector, capture:captureSummary, materialized, ...result }));
   const holdMs = Number(process.env.PENCIL_CAPTURE_HOLD_MS || 0);
   if (holdMs > 0) await new Promise((resolve) => setTimeout(resolve, holdMs));
 } finally {

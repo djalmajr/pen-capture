@@ -1,6 +1,6 @@
 {
   "name": "pencil-capture",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "type": "module",
   "bin": { "pencil-capture": "./bin/pencil-capture.mjs" },
@@ -10,6 +10,8 @@
     "compare:visual": "bun scripts/compare-visual.mjs",
     "smoke:clipboard": "bun scripts/smoke-clipboard.mjs",
     "smoke:picker": "bun scripts/smoke-picker.mjs",
+    "smoke:iframe": "bun scripts/smoke-iframe-picker.mjs",
+    "smoke:extension-iframe": "bun scripts/smoke-extension-iframe.mjs",
     "smoke:preview-01": "bun scripts/smoke-preview01-fidelity.mjs",
     "smoke:preview-02": "bun scripts/smoke-preview02-fidelity.mjs",
     "test": "bun test",

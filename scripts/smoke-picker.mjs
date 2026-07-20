@@ -16,7 +16,16 @@ try {
       configurable:true,
       value:{ runtime:{
         getURL:(path) => `https://extension.invalid/${path}`,
-        sendMessage:async (message) => ({ok:true,finalUrl:message.url,dataUrl:null}),
+        sendMessage:async (message) => {
+          if (message.type === "pencil-capture:write-clipboard") {
+            await navigator.clipboard.write([new ClipboardItem({
+              "text/html":new Blob([message.html], {type:"text/html"}),
+              "text/plain":new Blob([message.plain], {type:"text/plain"}),
+            })]);
+            return {ok:true};
+          }
+          return {ok:true,finalUrl:message.url,dataUrl:null};
+        },
       } },
     });
   });

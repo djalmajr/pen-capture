@@ -6,6 +6,7 @@ import { fetchExtensionAsset } from "../src/extension/asset-fetch.mjs";
 import { effectiveFilter } from "../src/capture-element.mjs";
 import { captureProgressForElapsed } from "../src/extension/capture-progress.mjs";
 import { waitForVisualStability } from "../src/extension/visual-stability.mjs";
+import { writeClipboardPayload } from "../src/extension/write-clipboard.mjs";
 
 describe("extension clipboard contract", () => {
   test("encodes Pencil's native node clipboard envelope", () => {
@@ -47,6 +48,64 @@ describe("extension clipboard contract", () => {
     expect(content).toContain("sourceSelector");
     expect(content).toContain("target.isConnected");
     expect(bridge).toContain("request.sourceSelector");
+  });
+
+  test("injects the picker and capture bridge into accessible iframe documents", async () => {
+    const background = await readFile(new URL("../src/extension/background.mjs", import.meta.url), "utf8");
+    const content = await readFile(new URL("../src/extension/content.mjs", import.meta.url), "utf8");
+    expect(background).toContain("allFrames:true");
+    expect(content).toContain("globalThis.top !== globalThis");
+    expect(content).toContain('target?.matches?.("iframe,frame")');
+    expect(content).toContain('globalThis.top.postMessage({type:FRAME_ACTIVITY_MESSAGE}, "*")');
+    expect(content).toContain('globalThis.top.postMessage({type:FRAME_CANCEL_MESSAGE}, "*")');
+  });
+
+  test("writes iframe captures through the extension offscreen document", async () => {
+    const manifest = JSON.parse(await readFile(new URL("../extension/manifest.json", import.meta.url), "utf8"));
+    const background = await readFile(new URL("../src/extension/background.mjs", import.meta.url), "utf8");
+    expect(manifest.permissions).toContain("offscreen");
+    expect(manifest.permissions).toContain("clipboardWrite");
+    expect(background).toContain('reasons:["CLIPBOARD"]');
+
+    const OriginalClipboardItem = globalThis.ClipboardItem;
+    globalThis.ClipboardItem = class ClipboardItem {
+      constructor(data) { this.data = data; this.types = Object.keys(data); }
+    };
+    const writes = [];
+    try {
+      const result = await writeClipboardPayload({html:"<b>Card</b>", plain:"Card"}, {clipboard:{write:async (items) => writes.push(items)}, documentRef:null});
+      expect(result).toEqual({ok:true, types:["text/html", "text/plain"]});
+      expect(writes).toHaveLength(1);
+    } finally {
+      globalThis.ClipboardItem = OriginalClipboardItem;
+    }
+  });
+
+  test("falls back to a copy event when the offscreen document is not focused", async () => {
+    const OriginalClipboardItem = globalThis.ClipboardItem;
+    globalThis.ClipboardItem = class ClipboardItem {
+      constructor(data) { this.types = Object.keys(data); }
+    };
+    const copied = {};
+    let listener;
+    const documentRef = {
+      addEventListener:(_type, nextListener) => { listener = nextListener; },
+      removeEventListener:() => {},
+      execCommand:() => {
+        listener({clipboardData:{setData:(type, value) => { copied[type] = value; }}, preventDefault:() => {}});
+        return true;
+      },
+    };
+    try {
+      const result = await writeClipboardPayload({html:"<b>Card</b>", plain:"Card"}, {
+        clipboard:{write:async () => { throw new DOMException("Document is not focused", "NotAllowedError"); }},
+        documentRef,
+      });
+      expect(result.ok).toBe(true);
+      expect(copied).toEqual({"text/html":"<b>Card</b>", "text/plain":"Card"});
+    } finally {
+      globalThis.ClipboardItem = OriginalClipboardItem;
+    }
   });
 
   test("reports bounded capture progress until real completion", () => {
