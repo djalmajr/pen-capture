@@ -22,6 +22,13 @@ try {
   });
   await page.addScriptTag({ path:new URL("dist/extension/content.js", root).pathname });
 
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => !document.getElementById("__pencil_capture_host__"));
+  await page.addScriptTag({ path:new URL("dist/extension/content.js", root).pathname });
+  if (await page.locator("#__pencil_capture_host__").count() !== 1) {
+    throw new Error("Picker did not reopen after Escape teardown");
+  }
+
   const target = page.locator(targetSelector);
   const box = await target.boundingBox();
   if (!box) throw new Error("Target has no visible bounding box");
@@ -62,7 +69,7 @@ try {
   if (!success.selectionHidden || !success.capturingHidden || success.successHidden || !clipboard.marker) {
     throw new Error(`Picker did not finish in its exclusive success view: ${JSON.stringify({ success, clipboard })}`);
   }
-  console.log(JSON.stringify({ url, clicked:true, capturing, success, clipboard }));
+  console.log(JSON.stringify({ url, escapeClosed:true, reopened:true, clicked:true, capturing, success, clipboard }));
 } finally {
   await browser.close();
 }

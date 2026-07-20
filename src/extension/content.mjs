@@ -172,9 +172,19 @@ function install() {
     capture(selection.current);
   }
 
+  function cancelFromKeyboard(event) {
+    if (!active) return false;
+    if (event.key === "Escape" || event.key === "Esc" || event.keyCode === 27) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      teardown();
+      return true;
+    }
+    return false;
+  }
+
   function onKeyDown(event) {
-    if (!active) return;
-    if (event.key === "Escape") return teardown();
+    if (!active || cancelFromKeyboard(event)) return;
     if (phase !== "selection") return;
     if (event.key === "ArrowUp") { event.preventDefault(); selectParent(selection, document.documentElement); return updateOutline(); }
     if (event.key === "ArrowDown") { event.preventDefault(); selectChild(selection); return updateOutline(); }
@@ -187,6 +197,7 @@ function install() {
     document.removeEventListener("mousemove", onPointerMove, true);
     document.removeEventListener("click", onClick, true);
     document.removeEventListener("keydown", onKeyDown, true);
+    globalThis.removeEventListener("keydown", cancelFromKeyboard, true);
     host.remove();
     delete globalThis[CONTROLLER_KEY];
   }
@@ -194,6 +205,7 @@ function install() {
   document.addEventListener("mousemove", onPointerMove, true);
   document.addEventListener("click", onClick, true);
   document.addEventListener("keydown", onKeyDown, true);
+  globalThis.addEventListener("keydown", cancelFromKeyboard, true);
   updateOutline();
   globalThis[CONTROLLER_KEY] = { toggle: teardown, teardown };
 }

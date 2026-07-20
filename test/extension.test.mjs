@@ -32,6 +32,13 @@ describe("extension clipboard contract", () => {
     expect(source).toContain("allowEmbeddedAssets:false");
   });
 
+  test("keeps Escape teardown in the compiled picker contract", async () => {
+    const content = await readFile(new URL("../src/extension/content.mjs", import.meta.url), "utf8");
+    expect(content).toContain('event.key === "Escape"');
+    expect(content).toContain('globalThis.addEventListener("keydown", cancelFromKeyboard, true)');
+    expect(content).toContain('globalThis.removeEventListener("keydown", cancelFromKeyboard, true)');
+  });
+
   test("resolves redirected image URLs before Pencil receives them", async () => {
     const content = await readFile(new URL("../src/extension/content.mjs", import.meta.url), "utf8");
     const calls = [];

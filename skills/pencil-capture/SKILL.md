@@ -7,6 +7,8 @@ description: Capture rendered web elements as editable Pencil layers through Pen
 
 Capture browser UI into editable Pencil layers. Prefer the extension's native `data-pen-node-clipboard` flow for direct paste; use the neutral IR and MCP conversion flow for scripted or auditable imports. Never write `.pen` files directly.
 
+This is an Agent Skills-compatible package for Codex, Claude Code and Grok. When invoking bundled commands outside this repository, set `PENCIL_CAPTURE_ROOT` to a Pencil Capture checkout so the wrapper can resolve the converter CLI.
+
 ## Workflow
 
 1. For direct use, activate the extension, select an element, and paste the resulting design payload in Pencil. Use `Cmd/Ctrl + Enter` to capture the whole page. The extension deliberately excludes embedded `data:` assets because Pencil Desktop 1.1.70 interprets them as filesystem paths and displays the base64 payload in an asset-error alert.

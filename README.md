@@ -2,7 +2,7 @@
 
 Capture rendered web elements and paste them as editable layers directly in Pencil.
 
-The project contains a browser-side capture library, a Chrome Manifest V3 extension with a Paper-like picker, a deterministic converter and CLI, a Codex skill, and `examples.pen` for integration tests.
+The project contains a browser-side capture library, a Chrome Manifest V3 extension with a Paper-like picker, a deterministic converter and CLI, an Agent Skill for Codex, Claude Code and Grok, and `examples.pen` for integration tests.
 
 ## Extension interaction
 
@@ -44,6 +44,22 @@ bun run build
 ```
 
 Load `dist/extension` as an unpacked extension from `chrome://extensions`.
+
+## Agent Skill
+
+The canonical Agent Skills package lives in `skills/pencil-capture` and can be discovered directly from this GitHub repository. Install it globally for Codex and Claude Code with the open `skills` CLI:
+
+```sh
+npx skills add djalmajr/pencil-capture --skill pencil-capture -g -a codex -a claude-code -y
+```
+
+Grok reads Claude Code skills automatically, so the Claude installation above is also the Grok-compatible installation. To keep an explicit Grok-only copy instead, install with the CLI and copy the canonical skill folder to `~/.grok/skills/pencil-capture`.
+
+List what the repository exposes without installing anything:
+
+```sh
+npx skills add djalmajr/pencil-capture --list
+```
 
 ## CLI
 
