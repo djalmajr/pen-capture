@@ -17,6 +17,8 @@ Click the extension icon to enter capture mode. The page gets a floating toolbar
 
 The toolbar fades while the pointer is over it so content underneath remains selectable. The extension converts the selected DOM subtree into editable Pencil nodes and writes Pencil's native `data-pen-node-clipboard` `text/html` payload to the clipboard. No page data is transmitted.
 
+The picker follows live DOM updates between hover and click. It recovers a selected element after a framework rerender and uses a short-lived private marker to preserve the exact node across Chrome's isolated and main execution worlds.
+
 During serialization the toolbar collapses to `Capturing selection…` or `Capturing page…`. A neutral background fill and percentage advance while the capture is running, stop below completion until the real work finishes, and reach `100%` only after the browser confirms that the `text/html` payload was written. The toolbar then switches to `Copied to clipboard. Ready to paste into Pencil.`.
 
 Direct extension paste runs in Pencil-safe asset mode. Remote `http(s)` images remain image fills, redirects are resolved before the URL reaches Pencil, and the clipboard never contains `data:` image URLs: Pencil Desktop 1.1.70 treats non-HTTP image values as filesystem paths, so an embedded base64 URL opens a large asset-error alert. Supported `brightness()` and `grayscale()` filters become editable overlay layers; CSS color blend overlays become Pencil blend fills. Canvas snapshots have no durable browser URL and therefore become a transparent `Canvas · Materialization required` frame with diagnostic metadata.

@@ -13,7 +13,7 @@ if (!globalThis[BRIDGE_KEY]) {
       return;
     }
     if (!request?.id || !request?.selector) return;
-    captureSelectionInMainWorld(request.selector)
+    captureSelectionInMainWorld(request.selector, request.sourceSelector)
       .then((result) => respond({ id:request.id, ok:true, ...result }))
       .catch((error) => respond({ id:request.id, ok:false, error:error.message }));
   };

@@ -7,6 +7,7 @@ const REQUEST_EVENT = "pencil-capture:copy-request";
 const RESPONSE_EVENT = "pencil-capture:copy-response";
 const ASSET_REQUEST_EVENT = "pencil-capture:asset-request";
 const ASSET_RESPONSE_EVENT = "pencil-capture:asset-response";
+const TARGET_ATTRIBUTE = "data-pencil-capture-target";
 
 document.documentElement.setAttribute("data-pencil-capture-extension", "ready");
 globalThis.addEventListener(ASSET_REQUEST_EVENT, async (event) => {
@@ -18,8 +19,11 @@ globalThis.addEventListener(ASSET_REQUEST_EVENT, async (event) => {
   }));
 });
 
-function copyDesign(selector) {
+function copyDesign(target, sourceSelector) {
   const id = crypto.randomUUID();
+  const targetToken = crypto.randomUUID();
+  const previousTargetToken = target.getAttribute(TARGET_ATTRIBUTE);
+  target.setAttribute(TARGET_ATTRIBUTE, targetToken);
   return new Promise((resolve) => {
     const timeout = setTimeout(() => finish({ ok:false, error:"Capture timed out" }), 65_000);
     const onResponse = (event) => {
@@ -34,11 +38,15 @@ function copyDesign(selector) {
     const finish = (response) => {
       clearTimeout(timeout);
       globalThis.removeEventListener(RESPONSE_EVENT, onResponse);
+      if (target.getAttribute(TARGET_ATTRIBUTE) === targetToken) {
+        if (previousTargetToken == null) target.removeAttribute(TARGET_ATTRIBUTE);
+        else target.setAttribute(TARGET_ATTRIBUTE, previousTargetToken);
+      }
       resolve(response);
     };
     globalThis.addEventListener(RESPONSE_EVENT, onResponse);
     globalThis.dispatchEvent(new CustomEvent(REQUEST_EVENT, {
-      detail:JSON.stringify({ id, selector }),
+      detail:JSON.stringify({ id, selector:`[${TARGET_ATTRIBUTE}="${targetToken}"]`, sourceSelector }),
     }));
   });
 }
@@ -132,6 +140,8 @@ function install() {
   let active = true;
   let phase = "selection";
   let progressAnimationFrame;
+  let selectionSelector = "body";
+  let lastPointer = null;
 
   function showView(nextPhase) {
     phase = nextPhase;
@@ -175,23 +185,48 @@ function install() {
 
   function onPointerMove(event) {
     if (!active || phase !== "selection") return;
+    lastPointer = {x:event.clientX,y:event.clientY};
     const rect = toolbar.getBoundingClientRect();
     const overToolbar = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
     toolbar.classList.toggle("pass-through", overToolbar);
     const target = document.elementFromPoint(event.clientX, event.clientY);
     if (target && target !== host && !host.contains(target)) {
       setHoveredTarget(selection, target);
+      selectionSelector = selectorFor(target);
       updateOutline();
     }
   }
 
-  async function capture(target) {
-    if (!target || phase !== "selection") return;
+  function resolveLiveTarget(target, fallbackTarget) {
+    if (target instanceof Element && target.isConnected) return target;
+    try {
+      const replacement = document.querySelector(selectionSelector);
+      if (replacement instanceof Element && replacement !== host && !host.contains(replacement)) return replacement;
+    } catch {}
+    if (fallbackTarget instanceof Element && fallbackTarget.isConnected && fallbackTarget !== host && !host.contains(fallbackTarget)) return fallbackTarget;
+    if (lastPointer) {
+      const pointedTarget = document.elementFromPoint(lastPointer.x,lastPointer.y);
+      if (pointedTarget instanceof Element && pointedTarget !== host && !host.contains(pointedTarget)) return pointedTarget;
+    }
+    return null;
+  }
+
+  async function capture(target, fallbackTarget) {
+    if (phase !== "selection") return;
+    target = resolveLiveTarget(target, fallbackTarget);
+    if (!target) {
+      capturingMessage.textContent = "The selected element is no longer available";
+      showView("capturing");
+      toolbar.classList.remove("is-capturing");
+      capturingPercentage.hidden = true;
+      return;
+    }
+    const sourceSelector = selectorFor(target);
     capturingMessage.textContent = target === document.body ? "Capturing page…" : "Capturing selection…";
     showView("capturing");
     startCaptureProgress();
     const capturingStartedAt = performance.now();
-    const response = await copyDesign(selectorFor(target));
+    const response = await copyDesign(target, sourceSelector);
     if (!active) return;
     const minimumCapturingTime = 450;
     const remainingCapturingTime = minimumCapturingTime - (performance.now() - capturingStartedAt);
@@ -215,7 +250,7 @@ function install() {
     if (!active || phase !== "selection" || event.target === host || host.contains(event.target)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    capture(selection.current);
+    capture(selection.current, event.target);
   }
 
   function cancelFromKeyboard(event) {
@@ -232,8 +267,8 @@ function install() {
   function onKeyDown(event) {
     if (!active || cancelFromKeyboard(event)) return;
     if (phase !== "selection") return;
-    if (event.key === "ArrowUp") { event.preventDefault(); selectParent(selection, document.documentElement); return updateOutline(); }
-    if (event.key === "ArrowDown") { event.preventDefault(); selectChild(selection); return updateOutline(); }
+    if (event.key === "ArrowUp") { event.preventDefault(); selectParent(selection, document.documentElement); selectionSelector = selectorFor(selection.current); return updateOutline(); }
+    if (event.key === "ArrowDown") { event.preventDefault(); selectChild(selection); selectionSelector = selectorFor(selection.current); return updateOutline(); }
     if (event.key === "Enter") { event.preventDefault(); return capture(isPageCaptureShortcut(event) ? document.body : selection.current); }
   }
 

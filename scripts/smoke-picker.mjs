@@ -32,8 +32,20 @@ try {
   const target = page.locator(targetSelector);
   const box = await target.boundingBox();
   if (!box) throw new Error("Target has no visible bounding box");
-  await page.mouse.move(box.x + Math.min(40, box.width / 2), box.y + Math.min(40, box.height / 2));
-  await page.mouse.click(box.x + Math.min(40, box.width / 2), box.y + Math.min(40, box.height / 2));
+  const pointer = {
+    x:box.x + Math.min(40, box.width / 2),
+    y:box.y + Math.min(40, box.height / 2),
+  };
+  await page.mouse.move(pointer.x, pointer.y);
+  const selectedBox = await page.evaluate(({ x, y }) => {
+    const selected = document.elementFromPoint(x, y);
+    if (!(selected instanceof Element)) return null;
+    const rect = selected.getBoundingClientRect();
+    selected.replaceWith(selected.cloneNode(true));
+    return { width:rect.width, height:rect.height };
+  },pointer);
+  if (!selectedBox) throw new Error("Picker did not select a live element under the pointer");
+  await page.mouse.click(pointer.x, pointer.y);
 
   const state = async () => page.locator("#__pencil_capture_host__").evaluate((host) => {
     const toolbar = host.shadowRoot.querySelector(".toolbar");
@@ -81,10 +93,14 @@ try {
       bytes:new Blob([html]).size,
       nodes:payload?.remoteData?.nodes?.length || 0,
       firstNodeType:payload?.remoteData?.nodes?.[0]?.type,
+      rootWidth:payload?.remoteData?.nodes?.[0]?.width,
     };
   });
   if (!success.selectionHidden || !success.capturingHidden || success.successHidden || !clipboard.marker) {
     throw new Error(`Picker did not finish in its exclusive success view: ${JSON.stringify({ success, clipboard })}`);
+  }
+  if (Math.abs(clipboard.rootWidth - selectedBox.width) > 1) {
+    throw new Error(`Picker did not recover the replaced selected element: ${JSON.stringify({expectedWidth:selectedBox.width,clipboard})}`);
   }
   if (success.progress !== 100 || success.progressVisible) {
     throw new Error(`Picker did not complete and hide its progress background: ${JSON.stringify(success)}`);

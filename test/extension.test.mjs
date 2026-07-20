@@ -40,6 +40,15 @@ describe("extension clipboard contract", () => {
     expect(content).toContain('globalThis.removeEventListener("keydown", cancelFromKeyboard, true)');
   });
 
+  test("marks the live target across isolated and main extension worlds", async () => {
+    const content = await readFile(new URL("../src/extension/content.mjs", import.meta.url), "utf8");
+    const bridge = await readFile(new URL("../src/extension/main-world-bridge.mjs", import.meta.url), "utf8");
+    expect(content).toContain('const TARGET_ATTRIBUTE = "data-pencil-capture-target"');
+    expect(content).toContain("sourceSelector");
+    expect(content).toContain("target.isConnected");
+    expect(bridge).toContain("request.sourceSelector");
+  });
+
   test("reports bounded capture progress until real completion", () => {
     expect(captureProgressForElapsed(0)).toBe(4);
     expect(captureProgressForElapsed(450)).toBeGreaterThanOrEqual(20);
