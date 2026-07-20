@@ -12,7 +12,7 @@ export const CAPTURED_STYLE_KEYS = [
   "borderTopLeftRadius", "borderTopRightRadius", "borderBottomRightRadius", "borderBottomLeftRadius",
   "fontFamily", "fontSize", "fontStyle", "fontWeight", "letterSpacing", "lineHeight",
   "textAlign", "textTransform", "opacity", "overflow", "visibility", "boxShadow",
-  "objectFit", "objectPosition",
+  "objectFit", "objectPosition", "filter",
   "fill", "stroke", "strokeWidth",
 ];
 
@@ -22,6 +22,53 @@ const CAPTURED_ATTRIBUTES = new Set([
   "d", "fill", "stroke", "x", "y", "x1", "y1", "x2", "y2", "width", "height",
   "cx", "cy", "r", "rx", "ry", "points", "viewBox", "text-anchor",
 ]);
+
+function nearestOpaqueBackground(node) {
+  for (let current = node; current instanceof Element; current = current.parentElement) {
+    const color = getComputedStyle(current).backgroundColor;
+    const alpha = color?.match(/rgba?\([^)]*[,/]\s*([\d.]+)\s*\)$/i)?.[1];
+    if (color && color !== "transparent" && Number(alpha ?? 1) > 0) return color;
+  }
+  return "rgb(255, 255, 255)";
+}
+
+function canvasSnapshot(node) {
+  const output = document.createElement("canvas");
+  output.width = node.width;
+  output.height = node.height;
+  const context = output.getContext("2d");
+  context.fillStyle = nearestOpaqueBackground(node);
+  context.fillRect(0, 0, output.width, output.height);
+  context.drawImage(node, 0, 0);
+  return output.toDataURL("image/png");
+}
+
+function filteredImageSnapshot(node, computed, rect) {
+  if (!computed.filter || computed.filter === "none" || !node.naturalWidth || !node.naturalHeight) return null;
+  const scaleFactor = Math.min(2, globalThis.devicePixelRatio || 1);
+  const width = Math.max(1, Math.ceil(rect.width * scaleFactor));
+  const height = Math.max(1, Math.ceil(rect.height * scaleFactor));
+  const output = document.createElement("canvas");
+  output.width = width;
+  output.height = height;
+  const context = output.getContext("2d");
+  context.fillStyle = nearestOpaqueBackground(node);
+  context.fillRect(0, 0, width, height);
+  context.filter = computed.filter;
+  const fit = computed.objectFit;
+  const scale = fit === "contain"
+    ? Math.min(width / node.naturalWidth, height / node.naturalHeight)
+    : fit === "cover"
+      ? Math.max(width / node.naturalWidth, height / node.naturalHeight)
+      : null;
+  if (scale == null) context.drawImage(node, 0, 0, width, height);
+  else {
+    const drawWidth = node.naturalWidth * scale;
+    const drawHeight = node.naturalHeight * scale;
+    context.drawImage(node, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+  }
+  return output.toDataURL("image/png");
+}
 
 function directTextSnapshot(node, rootRect) {
   const textNodes = Array.from(node.childNodes).filter((child) => child.nodeType === Node.TEXT_NODE && child.textContent?.trim());
@@ -57,12 +104,13 @@ export function captureElement(root, options = {}) {
       if (node.tagName === "SELECT") attributes.selectedLabel = node.selectedOptions[0]?.textContent?.trim() || "";
     }
     if (node.tagName === "CANVAS") {
-      try { attributes.dataUrl = node.toDataURL("image/png"); } catch { attributes.dataUrl = null; }
+      try { attributes.dataUrl = canvasSnapshot(node); } catch { attributes.dataUrl = null; }
     }
     if (node.tagName === "IMG") {
       attributes.currentSrc = node.currentSrc || node.src || attributes.src || null;
       attributes.naturalWidth = node.naturalWidth;
       attributes.naturalHeight = node.naturalHeight;
+      try { attributes.dataUrl = filteredImageSnapshot(node, computed, rect); } catch { attributes.dataUrl = null; }
     }
     nodes.push({
       path, parentPath, tag: node.tagName.toLowerCase(), namespace: node.namespaceURI,
