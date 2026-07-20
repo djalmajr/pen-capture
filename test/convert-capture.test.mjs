@@ -251,6 +251,19 @@ describe("convertCaptureToPencil", () => {
     expect(result.root.children[1]).toMatchObject({ type:"frame", fill:{type:"image",mode:"fill"} });
   });
 
+  test("uses Pencil-safe HTTP assets and marks canvas for materialization in extension mode", () => {
+    const styles = {...rootStyles,backgroundColor:"transparent",backgroundImage:"none",objectFit:"cover"};
+    const capture = {format:"pencil-capture-ir",version:1,rootPath:"0",label:"Portable",source:{url:"https://example.com/page"},nodes:[
+      {path:"0",parentPath:null,tag:"div",name:"root",text:null,rect:{x:0,y:0,width:320,height:180},attributes:{},styles:rootStyles},
+      {path:"0.0",parentPath:"0",tag:"img",name:"photo",text:null,rect:{x:10,y:10,width:120,height:80},attributes:{currentSrc:"https://cdn.example.com/photo.png",dataUrl:"data:image/png;base64,AAAA",effectiveFilter:"grayscale(1)"},styles},
+      {path:"0.1",parentPath:"0",tag:"canvas",name:"waveform",text:null,rect:{x:10,y:100,width:280,height:60},attributes:{dataUrl:"data:image/png;base64,BBBB"},styles},
+    ]};
+    const root = convertCaptureToPencil(capture,{allowEmbeddedAssets:false}).root;
+    expect(root.children[0]).toMatchObject({type:"rectangle",fill:{type:"image",url:"https://cdn.example.com/photo.png"},metadata:{type:"pencil-capture-image",filter:"grayscale(1)"}});
+    expect(root.children[1]).toMatchObject({type:"frame",name:"Canvas · Materialization required",metadata:{type:"pencil-capture-unmaterialized-canvas",reason:"embedded-assets-disabled"}});
+    expect(JSON.stringify(root)).not.toContain("data:image/");
+  });
+
   test("expands repeating linear gradients into Pencil gradient stops", () => {
     const node = { rect:{width:100,height:100}, attributes:{}, styles:{backgroundImage:"repeating-linear-gradient(45deg, rgba(0, 0, 0, 0) 0px, rgba(0, 0, 0, 0) 10px, rgb(220, 220, 215) 10px, rgb(220, 220, 215) 11px)"} };
     const fill = cssBackgroundToFill(node);

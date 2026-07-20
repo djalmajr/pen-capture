@@ -71,6 +71,7 @@ try {
   if (!result || result.marker !== true) {
     throw new Error(`Clipboard smoke test failed: ${JSON.stringify({ result, browserErrors })}`);
   }
+  result.containsDataUrl = Boolean(result.html?.includes("data:image/"));
   let materialized = null;
   if (process.env.PENCIL_CAPTURE_MATERIALIZE_DIR && result.html) {
     const encoded = result.html.match(/data-pen-node-clipboard="([^"]+)"/)?.[1];

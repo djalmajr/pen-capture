@@ -9,7 +9,7 @@ Capture browser UI into editable Pencil layers. Prefer the extension's native `d
 
 ## Workflow
 
-1. For direct use, activate the extension, select an element, and paste the resulting design payload in Pencil. Use `Cmd/Ctrl + Enter` to capture the whole page.
+1. For direct use, activate the extension, select an element, and paste the resulting design payload in Pencil. Use `Cmd/Ctrl + Enter` to capture the whole page. The extension deliberately excludes embedded `data:` assets because Pencil Desktop 1.1.70 interprets them as filesystem paths and displays the base64 payload in an asset-error alert.
 2. For scripted use, obtain one `*.capture.json` file from the browser-side capture script or a fixture.
 3. Run `scripts/pencil-capture.mjs verify <capture>`.
 4. Run `scripts/pencil-capture.mjs convert <capture> <tree.json>`.
@@ -19,6 +19,8 @@ Capture browser UI into editable Pencil layers. Prefer the extension's native `d
 8. Validate the returned root with `snapshot_layout(problemsOnly: true)` and `get_screenshot`.
 9. Query the inserted subtree and normalize every layer to `Name (#currentId)` through Pencil MCP. Clipboard paste always remaps IDs, including IDs supplied by the payload.
 10. Export the completed root as PNG with Pencil MCP, capture the source element with `scripts/capture-source-screenshot.mjs`, and run `scripts/compare-visual.mjs` to produce the visual report.
+
+Direct extension paste preserves remote `http(s)` images. Canvas content becomes a `Canvas · Materialization required` placeholder, and browser-only raster filters may remain metadata-only. When those pixels are required, use the scripted CLI/MCP path with `PENCIL_CAPTURE_MATERIALIZE_DIR` so assets are written to durable project-local files before insertion.
 
 For nested catalogs, materialize each completed capture with `Copy` followed by deletion of the temporary insertion. Then query the copied subtree and normalize every copied layer to `Name (#currentId)`; copied descendants receive new IDs and must not retain stale suffixes.
 
@@ -46,5 +48,7 @@ bun scripts/compare-visual.mjs artifacts/source.png artifacts/pencil.png artifac
 ```
 
 The report records both original dimensions and whether normalization was needed. A low RMSE is evidence, not the only gate: inspect `side-by-side.png`, `diff.png`, the Pencil screenshot and `snapshot_layout` together.
+
+For the direct extension path, also inspect the smoke result and require `containsDataUrl: false` before pasting into Pencil. Reload the unpacked extension after every rebuild.
 
 Read [references/capture-ir.md](references/capture-ir.md) when modifying the schema or converter.

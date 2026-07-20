@@ -98,10 +98,27 @@ function parseGradientStop(value) {
   return { color, position:match?.[2] == null ? null : Number(match[2]), unit:match?.[3] || null };
 }
 
-export function cssBackgroundToFill(node) {
+function firstCssImageUrl(value) {
+  return value?.match(/url\((?:"([^"]+)"|'([^']+)'|([^)'"\s]+))\)/i)?.slice(1).find(Boolean) || null;
+}
+
+function absoluteHttpUrl(value, baseUrl) {
+  if (!value || value.startsWith("data:") || value.startsWith("blob:")) return null;
+  try {
+    const url = new URL(value,baseUrl || undefined);
+    return ["http:","https:"].includes(url.protocol) ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+export function cssBackgroundToFill(node, options = {}) {
   const value = node.styles.backgroundImage;
   if (!value || value === "none") return null;
-  const imageUrl = node.attributes.backgroundAssetUrls?.[0];
+  const embeddedUrl = node.attributes.backgroundAssetUrls?.[0];
+  const imageUrl = options.allowEmbeddedAssets === false
+    ? absoluteHttpUrl(embeddedUrl,options.baseUrl) || absoluteHttpUrl(firstCssImageUrl(value),options.baseUrl)
+    : embeddedUrl;
   if (imageUrl) {
     const size = node.styles.backgroundSize;
     return { type:"image", url:imageUrl, mode:size === "contain" ? "fit" : size === "cover" ? "fill" : "stretch" };
@@ -384,7 +401,7 @@ function svgGraphic(node, parent, byPath) {
   return null;
 }
 
-export function convertCaptureToPencil(capture) {
+export function convertCaptureToPencil(capture, options = {}) {
   if (capture?.format !== "pencil-capture-ir" || capture?.version !== 1) throw new Error("Unsupported capture format");
   const byPath = new Map(capture.nodes.map((node) => [node.path, node]));
   const rootSource = byPath.get(capture.rootPath);
@@ -430,13 +447,23 @@ export function convertCaptureToPencil(capture) {
       return graphic;
     }
     if (node.tag === "img" || node.tag === "canvas") {
-      const url = node.attributes.assetUrl || node.attributes.dataUrl || node.attributes.currentSrc || node.attributes.src;
+      const allowEmbeddedAssets = options.allowEmbeddedAssets !== false;
+      const url = allowEmbeddedAssets
+        ? node.attributes.assetUrl || node.attributes.dataUrl || node.attributes.currentSrc || node.attributes.src
+        : absoluteHttpUrl(node.attributes.currentSrc || node.attributes.src || node.attributes.assetUrl,capture.source?.url);
+      if (!url && node.tag === "canvas" && !allowEmbeddedAssets) {
+        stats.frames += 1;
+        return {
+          type:"frame",name:"Canvas · Materialization required",layout:"none",layoutPosition:"absolute",
+          ...relativeRect(node,parent),metadata:{type:"pencil-capture-unmaterialized-canvas",reason:"embedded-assets-disabled"},children:[],
+        };
+      }
       if (!url) { stats.skipped += 1; return null; }
       stats.images += 1;
       const filter = node.attributes.effectiveFilter;
       return { type:"rectangle", name:semanticLayerName(node), layoutPosition:"absolute", ...relativeRect(node, parent), fill:{ type:"image", url, mode:node.tag === "img" ? imageMode(node) : "stretch" }, cornerRadius:cornerRadius(node.styles), ...(filter && filter !== "none" ? {metadata:{type:"pencil-capture-image",filter}} : {}) };
     }
-    const backgroundFill = cssBackgroundToFill(node);
+    const backgroundFill = cssBackgroundToFill(node,{allowEmbeddedAssets:options.allowEmbeddedAssets !== false,baseUrl:capture.source?.url});
     const backgroundColor = safeColor(node.styles.backgroundColor);
     const shadows = parseCssShadows(node.styles.boxShadow);
     const border = Object.keys(borderProperties(node.styles)).length ? borderProperties(node.styles) : shadowRingBorder(shadows);

@@ -23,6 +23,11 @@ describe("extension clipboard contract", () => {
     expect(manifest.icons["128"]).toBe("icons/icon-128.png");
     expect(manifest.host_permissions).toEqual(["<all_urls>"]);
   });
+
+  test("disables embedded assets in the direct extension paste path", async () => {
+    const source = await readFile(new URL("../src/extension/main-world-capture.mjs", import.meta.url), "utf8");
+    expect(source).toContain("allowEmbeddedAssets:false");
+  });
 });
 
 describe("capture shortcuts", () => {

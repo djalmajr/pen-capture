@@ -19,9 +19,11 @@ The toolbar fades while the pointer is over it so content underneath remains sel
 
 During serialization the toolbar collapses to `Capturing selection…` or `Capturing page…`. It only shows `Copied to clipboard. Ready to paste into Pencil.` after the browser confirms that the `text/html` payload was written.
 
+Direct extension paste runs in Pencil-safe asset mode. Remote `http(s)` images remain image fills, but the clipboard never contains `data:` image URLs: Pencil Desktop 1.1.70 treats non-HTTP image values as filesystem paths, so an embedded base64 URL opens a large asset-error alert. Canvas snapshots have no durable browser URL and therefore become a transparent `Canvas · Materialization required` frame with diagnostic metadata. Browser-only image filters are retained as metadata, although Pencil may not render the filter in direct mode.
+
 The neutral `*.capture.json` IR and conversion CLI remain available for diagnostics, repeatable MCP imports, and regression tests. They are no longer the extension's clipboard format.
 
-For durable project captures, set `PENCIL_CAPTURE_MATERIALIZE_DIR` while running the clipboard smoke workflow. Image and canvas fills are downloaded or decoded into project-local files, and the clipboard payload is rewritten to use paths relative to the `.pen` document. This avoids Pencil exposing large `data:` URLs as asset errors.
+For durable, maximum-fidelity project captures, set `PENCIL_CAPTURE_MATERIALIZE_DIR` while running the clipboard smoke workflow or use the CLI/MCP import. Image and canvas fills are downloaded or decoded into project-local files, and the clipboard payload is rewritten to use paths relative to the `.pen` document. This is the required path when canvas pixels or filtered raster output must be preserved.
 
 The transparent vector in `extension/icons/pencil.svg` recreates Pencil's public app icon from
 `https://www.pencil.dev/_next/image?url=%2Fpencil-app-icon.png&w=96&q=75`. The Chrome PNG sizes are rendered from that SVG.
@@ -29,6 +31,8 @@ The transparent vector in `extension/icons/pencil.svg` recreates Pencil's public
 ## Clipboard compatibility
 
 The main extension path is independent of Figma. Its clipboard envelope mirrors the native format produced by Pencil itself, while the neutral capture IR and conversion pipeline remain testable outside the extension.
+
+After rebuilding, reload the unpacked extension in `chrome://extensions` before testing changes to its clipboard behavior.
 
 ## Development
 

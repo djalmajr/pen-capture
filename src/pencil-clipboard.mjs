@@ -38,7 +38,9 @@ export async function captureElementForPencil(element, options = {}) {
   const capture = captureElement(element, options);
   await hydrateFilteredImageAssets(capture, element);
   if (options.inlineAssets === true) await inlineCaptureAssets(capture, options);
-  const converted = convertCaptureToPencil(capture);
+  const converted = convertCaptureToPencil(capture, {
+    allowEmbeddedAssets:options.allowEmbeddedAssets !== false,
+  });
   return {
     capture,
     converted,

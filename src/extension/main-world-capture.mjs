@@ -7,6 +7,10 @@ export async function captureSelectionInMainWorld(targetSelector) {
   const { capture, html, converted } = await captureElementForPencil(target, {
     selector: targetSelector,
     url: globalThis.location.href,
+    // Pencil treats data: image URLs as filesystem paths and exposes the
+    // entire base64 value in an asset error. Direct extension paste must use
+    // fetchable source URLs; the CLI/MCP workflow materializes embedded assets.
+    allowEmbeddedAssets:false,
   });
   const item = new ClipboardItem({
     "text/html": new Blob([html], { type:"text/html" }),
