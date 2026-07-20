@@ -15,6 +15,7 @@ export const CAPTURED_STYLE_KEYS = [
   "textAlign", "textTransform", "textDecorationLine", "textDecorationColor", "textDecorationThickness", "textUnderlineOffset", "whiteSpace", "textOverflow", "opacity", "overflow", "visibility", "boxShadow",
   "objectFit", "objectPosition", "filter", "mixBlendMode",
   "fill", "fillOpacity", "stroke", "strokeWidth", "strokeOpacity", "strokeDasharray", "strokeDashoffset",
+  "stopColor", "stopOpacity",
 ];
 
 const CAPTURED_ATTRIBUTES = new Set([
@@ -22,6 +23,7 @@ const CAPTURED_ATTRIBUTES = new Set([
   "placeholder", "min", "max", "step",
   "d", "fill", "stroke", "x", "y", "x1", "y1", "x2", "y2", "width", "height",
   "cx", "cy", "r", "rx", "ry", "points", "viewBox", "text-anchor",
+  "id", "offset", "stop-color", "stop-opacity", "gradientUnits", "gradientTransform",
 ]);
 
 const EXTENSION_ASSET_REQUEST = "pencil-capture:asset-request";

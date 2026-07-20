@@ -10,6 +10,7 @@
     "compare:visual": "bun scripts/compare-visual.mjs",
     "smoke:clipboard": "bun scripts/smoke-clipboard.mjs",
     "smoke:picker": "bun scripts/smoke-picker.mjs",
+    "smoke:preview-02": "bun scripts/smoke-preview02-fidelity.mjs",
     "test": "bun test",
     "verify": "bun test && bun scripts/build-extension.mjs"
   }

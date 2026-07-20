@@ -78,6 +78,18 @@ function colorWithOpacity(color, opacity) {
   return `${base}${channelToHex(alpha)}`;
 }
 
+function colorWithCombinedOpacity(color, ...opacities) {
+  if (!color) return null;
+  const expanded = color.length === 4
+    ? `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}`
+    : color.length === 5
+      ? `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}${color[4]}${color[4]}`
+      : color;
+  const sourceAlpha = expanded.length === 9 ? Number.parseInt(expanded.slice(7), 16) / 255 : 1;
+  const alpha = opacities.reduce((value, opacity) => value * clamp(px(opacity, 1)), sourceAlpha);
+  return `${expanded.slice(0, 7)}${channelToHex(alpha)}`;
+}
+
 function gradientColor(value) {
   if (value === "transparent" || /^rgba?\([^)]*[,/]\s*0(?:\.0+)?\s*\)$/i.test(value)) return "#00000000";
   return safeColor(value);
@@ -171,6 +183,51 @@ export function cssBackgroundToFill(node, options = {}) {
   return { type:"gradient", gradientType:"linear", rotation:((360 - cssAngle) % 360 + 360) % 360, colors };
 }
 
+function repeatingLinearPattern(node) {
+  const value = node.styles.backgroundImage;
+  const match = value?.match(/^repeating-linear-gradient\((.*)\)$/i);
+  if (!match) return null;
+  const args = splitCssArguments(match[1]);
+  let cssAngle = 180;
+  if (/^-?[\d.]+deg$/i.test(args[0])) cssAngle = Number.parseFloat(args.shift());
+  const stops = args.map(parseGradientStop).filter(Boolean);
+  const pixelStops = stops.filter((stop) => stop.unit === "px" && Number.isFinite(stop.position));
+  const period = Math.max(...pixelStops.map((stop) => stop.position));
+  if (!(period > 0)) return null;
+  const bands = [];
+  for (let index = 0; index < pixelStops.length - 1; index += 1) {
+    const start = pixelStops[index];
+    const end = pixelStops[index + 1];
+    if (start.color === end.color && start.color !== "#00000000" && end.position > start.position) {
+      bands.push({color:start.color,start:start.position,end:end.position});
+    }
+  }
+  if (!bands.length) return null;
+  const width = round(node.rect.width);
+  const height = round(node.rect.height);
+  const radians = cssAngle * Math.PI / 180;
+  const direction = {x:Math.cos(radians),y:Math.sin(radians)};
+  const normal = {x:-direction.y,y:direction.x};
+  const extent = (Math.abs(normal.x) * width + Math.abs(normal.y) * height) / 2;
+  const length = Math.hypot(width,height) * 1.5;
+  const center = {x:width / 2,y:height / 2};
+  const children = [];
+  for (const band of bands) {
+    const phase = (band.start + band.end) / 2;
+    const first = Math.floor((-extent - phase) / period) * period + phase;
+    for (let distance = first; distance <= extent + period; distance += period) {
+      const cx = center.x + normal.x * distance;
+      const cy = center.y + normal.y * distance;
+      children.push({
+        type:"path",name:"Diagonal stripe",layoutPosition:"absolute",x:0,y:0,width,height,
+        geometry:`M ${round(cx-direction.x*length)} ${round(cy-direction.y*length)} L ${round(cx+direction.x*length)} ${round(cy+direction.y*length)}`,
+        viewBox:[0,0,width,height],fill:"#00000000",stroke:band.color,strokeWidth:round(band.end-band.start),strokeLinecap:"butt",
+      });
+    }
+  }
+  return {type:"frame",name:`${semanticLayerName(node)} · Background image`,layout:"none",layoutPosition:"absolute",x:0,y:0,width,height,clip:true,children};
+}
+
 function transformedText(node, value = node.text) {
   if (node.styles.textTransform === "uppercase") return value.toUpperCase();
   if (node.styles.textTransform === "lowercase") return value.toLowerCase();
@@ -247,8 +304,12 @@ function shadowRingBorder(shadows) {
   return ring ? {stroke:ring.color,strokeWidth:ring.spread,strokeAlignment:"inner"} : {};
 }
 
-function graphicPaint(node, strokeScale = 1) {
-  const fill = colorWithOpacity(safeColor(node.styles.fill), node.styles.fillOpacity);
+function graphicPaint(node, strokeScale = 1, paintServers = new Map()) {
+  const paintReference = node.styles.fill?.match(/^url\(["']?#([^"')]+)["']?\)$/i)?.[1];
+  const referencedFill = paintReference ? paintServers.get(paintReference) : null;
+  const fill = referencedFill
+    ? {...referencedFill,colors:referencedFill.colors.map((stop) => ({...stop,color:colorWithCombinedOpacity(stop.color,node.styles.fillOpacity)}))}
+    : colorWithOpacity(safeColor(node.styles.fill), node.styles.fillOpacity);
   const stroke = colorWithOpacity(safeColor(node.styles.stroke), node.styles.strokeOpacity);
   return {
     fill:fill || "#00000000",
@@ -395,7 +456,7 @@ function filteredImageNode(node, parent, url) {
   return {type:"frame",name:semanticLayerName(node),layout:"none",layoutPosition:"absolute",...rect,clip:true,cornerRadius:cornerRadius(node.styles),metadata:{type:"pencil-capture-image-filter",filter},children};
 }
 
-function svgGraphic(node, parent, byPath) {
+function svgGraphic(node, parent, byPath, paintServers) {
   let svg = node;
   while (svg && svg.tag !== "svg") svg = byPath.get(svg.parentPath);
   const viewBox = (svg?.attributes.viewBox || `0 0 ${svg?.rect.width || node.rect.width} ${svg?.rect.height || node.rect.height}`).split(/[\s,]+/).map(Number);
@@ -408,7 +469,7 @@ function svgGraphic(node, parent, byPath) {
   const primitiveRect = svg ? {
     x:round(node.rect.x - svg.rect.x), y:round(node.rect.y - svg.rect.y), width:round(node.rect.width), height:round(node.rect.height),
   } : relativeRect(node, parent);
-  const base = { name:semanticLayerName(node), layoutPosition:"absolute", ...(node.tag === "path" ? svgRelativeRect : primitiveRect), ...graphicPaint(node, strokeScale) };
+  const base = { name:semanticLayerName(node), layoutPosition:"absolute", ...(node.tag === "path" ? svgRelativeRect : primitiveRect), ...graphicPaint(node, strokeScale, paintServers) };
   if (node.tag === "rect") return { type:"rectangle", ...base, cornerRadius:round(px(node.attributes.rx || node.attributes.ry)) };
   if (node.tag === "circle" || node.tag === "ellipse") {
     const dash = String(node.styles.strokeDasharray || "").match(/([\d.]+)px[, ]+([\d.]+)px/);
@@ -464,6 +525,22 @@ export function convertCaptureToPencil(capture, options = {}) {
     if (!childPaths.has(node.parentPath)) childPaths.set(node.parentPath, []);
     childPaths.get(node.parentPath).push(node.path);
   }
+  const paintServers = new Map();
+  for (const node of capture.nodes) {
+    if (node.namespace !== "http://www.w3.org/2000/svg" || node.tag !== "lineargradient" || !node.attributes.id) continue;
+    const stops = (childPaths.get(node.path) || []).map((path) => byPath.get(path)).filter((child) => child?.tag === "stop").flatMap((stop) => {
+      const color = safeColor(stop.styles.stopColor || stop.attributes["stop-color"]);
+      if (!color) return [];
+      const rawOffset = stop.attributes.offset || "0";
+      const position = rawOffset.endsWith("%") ? px(rawOffset) / 100 : px(rawOffset);
+      return [{color:colorWithCombinedOpacity(color,stop.styles.stopOpacity || stop.attributes["stop-opacity"]),position:clamp(position)}];
+    });
+    if (stops.length < 2) continue;
+    const x1 = px(node.attributes.x1,0); const y1 = px(node.attributes.y1,0);
+    const x2 = px(node.attributes.x2,0); const y2 = px(node.attributes.y2,1);
+    const rotation = ((Math.atan2(-(x2-x1),-(y2-y1))*180/Math.PI)%360+360)%360;
+    paintServers.set(node.attributes.id,{type:"gradient",gradientType:"linear",rotation:round(rotation),colors:stops});
+  }
   const stats = { frames:0, groups:0, texts:0, images:0, gradients:0, svgGraphics:0, controls:0, skipped:0, skippedSvgInvisible:0, skippedSvgUnsupported:0, skippedRoots:{} };
   const convertNode = (node, parent) => {
     if (node.namespace === "http://www.w3.org/2000/svg" && ["defs", "clippath", "title", "desc"].includes(node.tag)) {
@@ -494,8 +571,11 @@ export function convertCaptureToPencil(capture, options = {}) {
       return null;
     }
     if (["path", "rect", "circle", "ellipse", "line", "polyline", "polygon"].includes(node.tag) && node.namespace === "http://www.w3.org/2000/svg") {
-      const graphic = svgGraphic(node, parent, byPath);
-      if (graphic) stats.svgGraphics += 1;
+      const graphic = svgGraphic(node, parent, byPath, paintServers);
+      if (graphic) {
+        stats.svgGraphics += 1;
+        if (graphic.fill?.type === "gradient") stats.gradients += 1;
+      }
       else stats.skippedSvgUnsupported += 1;
       return graphic;
     }
@@ -516,7 +596,8 @@ export function convertCaptureToPencil(capture, options = {}) {
       if (node.tag === "img") return filteredImageNode(node,parent,url);
       return {type:"rectangle",name:semanticLayerName(node),layoutPosition:"absolute",...relativeRect(node,parent),fill:{type:"image",url,mode:"stretch"},cornerRadius:cornerRadius(node.styles)};
     }
-    const backgroundFill = cssBackgroundToFill(node,{allowEmbeddedAssets:options.allowEmbeddedAssets !== false,baseUrl:capture.source?.url});
+    const repeatingPattern = repeatingLinearPattern(node);
+    const backgroundFill = repeatingPattern ? null : cssBackgroundToFill(node,{allowEmbeddedAssets:options.allowEmbeddedAssets !== false,baseUrl:capture.source?.url});
     const backgroundColor = safeColor(node.styles.backgroundColor);
     const blendMode = pencilBlendMode(node.styles.mixBlendMode);
     const shadows = parseCssShadows(node.styles.boxShadow);
@@ -533,7 +614,7 @@ export function convertCaptureToPencil(capture, options = {}) {
       if (svg) frameRect = {x:round(node.rect.x-svg.rect.x),y:round(node.rect.y-svg.rect.y),width:round(node.rect.width),height:round(node.rect.height)};
     }
     const clipped = ["hidden", "clip"].includes(node.styles.overflow);
-    const framed = node.path === capture.rootPath || Boolean(backgroundFill || backgroundColor || border.stroke || effects.length || clipped);
+    const framed = node.path === capture.rootPath || Boolean(repeatingPattern || backgroundFill || backgroundColor || border.stroke || effects.length || clipped);
     const frame = framed ? {
       type:"frame", name:semanticLayerName(node), layout:"none", layoutPosition:"absolute",
       ...frameRect, cornerRadius:cornerRadius(node.styles),
@@ -552,8 +633,9 @@ export function convertCaptureToPencil(capture, options = {}) {
         fill:blendMode ? {...backgroundFill,blendMode} : backgroundFill,
       });
     }
+    if (repeatingPattern) frame.children.push(repeatingPattern);
     if (backgroundFill?.type === "image") stats.images += 1;
-    if (backgroundFill?.type === "gradient") stats.gradients += 1;
+    if (backgroundFill?.type === "gradient" || repeatingPattern) stats.gradients += 1;
     const textRuns = Array.isArray(node.textRuns)
       ? node.textRuns.filter((run) => run?.text && run.rect?.width > 0 && run.rect?.height > 0)
       : [];

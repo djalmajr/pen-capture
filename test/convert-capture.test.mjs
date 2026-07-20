@@ -291,13 +291,15 @@ describe("convertCaptureToPencil", () => {
     expect(root.children[1]).toMatchObject({type:"frame",fill:"#F0B100",width:8,height:8});
   });
 
-  test("layers a transparent repeating gradient over its background color", () => {
+  test("materializes a transparent repeating gradient as uniform editable stripes", () => {
     const capture = {format:"pencil-capture-ir",version:1,rootPath:"0",label:"Live",source:{},nodes:[
       {path:"0",parentPath:null,tag:"div",name:"media",text:null,rect:{x:0,y:0,width:320,height:180},attributes:{},styles:{...rootStyles,backgroundColor:"oklch(0.966 0.005 106.5)",backgroundImage:"repeating-linear-gradient(45deg, rgba(0, 0, 0, 0) 0px, rgba(0, 0, 0, 0) 10px, oklch(0.93 0.007 106.5) 10px, oklch(0.93 0.007 106.5) 11px)",overflow:"hidden"}},
     ]};
     const root = convertCaptureToPencil(capture).root;
     expect(root.fill).toBe("#F4F4F0");
-    expect(root.children[0]).toMatchObject({type:"rectangle",name:"Div · media · Background image",fill:{type:"gradient"}});
+    expect(root.children[0]).toMatchObject({type:"frame",name:"Div · media · Background image",clip:true});
+    expect(root.children[0].children.length).toBeGreaterThan(20);
+    expect(root.children[0].children.every((child) => child.type === "path" && child.stroke === "#E8E8E3" && child.strokeWidth === 1)).toBe(true);
   });
 
   test("expands repeating linear gradients into Pencil gradient stops", () => {
@@ -306,5 +308,21 @@ describe("convertCaptureToPencil", () => {
     expect(fill).toMatchObject({ type:"gradient", gradientType:"linear", rotation:315 });
     expect(fill.colors.length).toBeGreaterThan(20);
     expect(fill.colors.some((stop) => stop.color === "#00000000")).toBe(true);
+  });
+
+  test("resolves SVG linear-gradient paint servers with combined fill opacity", () => {
+    const styles = {...rootStyles,backgroundColor:"transparent",fill:"none",fillOpacity:"1",stroke:"none",strokeWidth:"0"};
+    const capture = {format:"pencil-capture-ir",version:1,rootPath:"0",label:"Stock",source:{},nodes:[
+      {path:"0",parentPath:null,tag:"div",name:"root",text:null,rect:{x:0,y:0,width:343,height:200},attributes:{},styles:rootStyles},
+      {path:"0.0",parentPath:"0",tag:"svg",namespace:"http://www.w3.org/2000/svg",name:"chart",text:null,rect:{x:0,y:0,width:343,height:200},attributes:{viewBox:"0 0 343 200"},styles},
+      {path:"0.0.0",parentPath:"0.0",tag:"defs",namespace:"http://www.w3.org/2000/svg",name:"defs",text:null,rect:{x:0,y:0,width:0,height:0},attributes:{},styles},
+      {path:"0.0.0.0",parentPath:"0.0.0",tag:"lineargradient",namespace:"http://www.w3.org/2000/svg",name:"gradient",text:null,rect:{x:0,y:0,width:0,height:0},attributes:{id:"fillPrice",x1:"0",y1:"0",x2:"0",y2:"1"},styles},
+      {path:"0.0.0.0.0",parentPath:"0.0.0.0",tag:"stop",namespace:"http://www.w3.org/2000/svg",name:"stop",text:null,rect:{x:0,y:0,width:0,height:0},attributes:{offset:"0%","stop-color":"oklch(0.879 0.169 91.605)","stop-opacity":"0.3"},styles:{...styles,stopColor:"oklch(0.879 0.169 91.605)",stopOpacity:"0.3"}},
+      {path:"0.0.0.0.1",parentPath:"0.0.0.0",tag:"stop",namespace:"http://www.w3.org/2000/svg",name:"stop",text:null,rect:{x:0,y:0,width:0,height:0},attributes:{offset:"100%","stop-color":"oklch(0.879 0.169 91.605)","stop-opacity":"0.05"},styles:{...styles,stopColor:"oklch(0.879 0.169 91.605)",stopOpacity:"0.05"}},
+      {path:"0.0.1",parentPath:"0.0",tag:"path",namespace:"http://www.w3.org/2000/svg",name:"area",text:null,rect:{x:0,y:52,width:343,height:148},attributes:{d:"M0 68L343 52L343 200L0 200Z"},styles:{...styles,fill:'url("#fillPrice")',fillOpacity:"0.6"}},
+    ]};
+    const area = convertCaptureToPencil(capture).root.children[0].children.find((child) => child.type === "path");
+    expect(area.fill).toMatchObject({type:"gradient",gradientType:"linear",rotation:180});
+    expect(area.fill.colors).toEqual([{color:"#FFD2302E",position:0},{color:"#FFD23008",position:1}]);
   });
 });
