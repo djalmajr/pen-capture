@@ -51,6 +51,14 @@ function safeColor(value) {
   try { return cssColorToHex(value); } catch { return null; }
 }
 
+function colorWithOpacity(color, opacity) {
+  if (!color) return null;
+  const alpha = clamp(px(opacity, 1));
+  if (alpha >= 1) return color;
+  const base = color.length === 9 ? color.slice(0, 7) : color;
+  return `${base}${channelToHex(alpha)}`;
+}
+
 function gradientColor(value) {
   if (value === "transparent" || /^rgba?\([^)]*[,/]\s*0(?:\.0+)?\s*\)$/i.test(value)) return "#00000000";
   return safeColor(value);
@@ -127,11 +135,11 @@ export function cssBackgroundToFill(node) {
   return { type:"gradient", gradientType:"linear", rotation:((360 - cssAngle) % 360 + 360) % 360, colors };
 }
 
-function transformedText(node) {
-  if (node.styles.textTransform === "uppercase") return node.text.toUpperCase();
-  if (node.styles.textTransform === "lowercase") return node.text.toLowerCase();
-  if (node.styles.textTransform === "capitalize") return node.text.replace(/\b\p{L}/gu, (letter) => letter.toUpperCase());
-  return node.text;
+function transformedText(node, value = node.text) {
+  if (node.styles.textTransform === "uppercase") return value.toUpperCase();
+  if (node.styles.textTransform === "lowercase") return value.toLowerCase();
+  if (node.styles.textTransform === "capitalize") return value.replace(/\b\p{L}/gu, (letter) => letter.toUpperCase());
+  return value;
 }
 
 function fontFamily(value) {
@@ -152,10 +160,24 @@ function isVisibleSvgContainer(node) {
     && isCssShown(node);
 }
 
+function isVisibleSvgGraphic(node) {
+  return node.namespace === "http://www.w3.org/2000/svg"
+    && ["path", "rect", "circle", "ellipse", "line", "polyline", "polygon"].includes(node.tag)
+    && isCssShown(node)
+    && (node.rect.width > 0 || node.rect.height > 0);
+}
+
 function isVisuallyHiddenControl(node) {
   return ["input", "select", "textarea"].includes(node.tag)
     && node.rect.width <= 1
     && node.rect.height <= 1;
+}
+
+function isVisuallyHiddenElement(node) {
+  return node.rect.width <= 1
+    && node.rect.height <= 1
+    && ["absolute", "fixed"].includes(node.styles.position)
+    && node.styles.overflow === "hidden";
 }
 
 function inferTitle(capture, rootSource) {
@@ -165,22 +187,30 @@ function inferTitle(capture, rootSource) {
   return (candidate?.text || declared || rootSource.name || "Element").replace(/\s+/g, " ").trim().slice(0, 80);
 }
 
-function cssShadowToEffect(value) {
-  if (!value || value === "none") return null;
-  const colorMatch = value.match(/(rgba?\([^)]*\)|oklch\([^)]*\)|oklab\([^)]*\)|#[0-9a-f]{3,8})/i);
-  const color = safeColor(colorMatch?.[1]);
-  if (!color) return null;
-  const rest = value.replace(colorMatch[0], "");
-  const numbers = Array.from(rest.matchAll(/(-?[\d.]+)px/g), (item) => Number(item[1]));
-  return { type:"shadow", shadowType:value.includes("inset") ? "inner" : "outer", offset:{ x:numbers[0] || 0, y:numbers[1] || 0 }, blur:Math.max(0, numbers[2] || 0), spread:numbers[3] || 0, color };
+function parseCssShadows(value) {
+  if (!value || value === "none") return [];
+  return splitCssArguments(value).flatMap((shadow) => {
+    const colorMatch = shadow.match(/(rgba?\([^)]*\)|oklch\([^)]*\)|oklab\([^)]*\)|#[0-9a-f]{3,8})/i);
+    const color = safeColor(colorMatch?.[1]);
+    if (!color) return [];
+    const rest = shadow.replace(colorMatch[0], "");
+    const numbers = Array.from(rest.matchAll(/(-?[\d.]+)px/g), (item) => Number(item[1]));
+    return [{ type:"shadow", shadowType:shadow.includes("inset") ? "inner" : "outer", offset:{ x:numbers[0] || 0, y:numbers[1] || 0 }, blur:Math.max(0, numbers[2] || 0), spread:numbers[3] || 0, color }];
+  });
 }
 
-function graphicPaint(node) {
-  const fill = safeColor(node.styles.fill);
-  const stroke = safeColor(node.styles.stroke);
+function shadowRingBorder(shadows) {
+  const ring = shadows.find((shadow) => shadow.offset.x === 0 && shadow.offset.y === 0 && shadow.blur === 0 && shadow.spread > 0);
+  return ring ? {stroke:ring.color,strokeWidth:ring.spread,strokeAlignment:"inner"} : {};
+}
+
+function graphicPaint(node, strokeScale = 1) {
+  const fill = colorWithOpacity(safeColor(node.styles.fill), node.styles.fillOpacity);
+  const stroke = colorWithOpacity(safeColor(node.styles.stroke), node.styles.strokeOpacity);
   return {
-    ...(fill ? { fill } : {}),
-    ...(stroke ? { stroke, strokeWidth:round(px(node.styles.strokeWidth, 1)), strokeLinecap:"round", strokeLinejoin:"round" } : {}),
+    fill:fill || "#00000000",
+    ...(stroke ? { stroke, strokeWidth:round(px(node.styles.strokeWidth, 1) * strokeScale), strokeLinecap:"round", strokeLinejoin:"round" } : {}),
+    ...(px(node.styles.opacity, 1) < 1 ? { opacity:round(px(node.styles.opacity, 1)) } : {}),
   };
 }
 
@@ -223,35 +253,50 @@ function borderProperties(styles) {
   };
 }
 
-function makeText(node, parent, name = `${semanticLayerName(node)} · Text`) {
+function makeText(node, parent, name = `${semanticLayerName(node)} · Text`, run = null) {
   const fontSize = px(node.styles.fontSize, 14);
-  const sourceRect = node.textRect || node.rect;
+  const sourceRect = run?.rect || node.textRect || node.rect;
+  const content = run?.text || node.text;
   const align = node.styles.textAlign === "center" || node.tag === "button" ? "center" : node.styles.textAlign === "right" ? "right" : "left";
+  const lineHeight = px(node.styles.lineHeight, fontSize * 1.2);
+  const singleLine = sourceRect.height <= lineHeight * 1.25;
+  const intrinsicSingleLine = Boolean(run) || (singleLine
+    && Math.abs(node.rect.width - sourceRect.width) <= 1.5
+    && Math.abs(node.rect.height - sourceRect.height) <= 2);
+  const widthCushion = singleLine ? Math.max(2, Math.min(6, sourceRect.width * 0.04)) : 0;
+  const xCushion = align === "center" ? widthCushion / 2 : align === "right" ? widthCushion : 0;
   return {
     type:"text", name, layoutPosition:"absolute",
-    x:round(sourceRect.x - parent.rect.x), y:round(sourceRect.y - parent.rect.y), width:round(sourceRect.width), height:round(sourceRect.height),
-    textGrowth:"fixed-width-height", content:transformedText(node),
+    x:round(sourceRect.x - parent.rect.x - (intrinsicSingleLine ? 0 : xCushion)), y:round(sourceRect.y - parent.rect.y),
+    ...(intrinsicSingleLine ? {textGrowth:"auto"} : {width:round(sourceRect.width + widthCushion),height:round(sourceRect.height),textGrowth:"fixed-width-height"}),
+    content:transformedText(node, content),
     fill:safeColor(node.namespace === "http://www.w3.org/2000/svg" ? node.styles.fill : node.styles.color) || "#000000",
     fontFamily:fontFamily(node.styles.fontFamily), fontSize:round(fontSize), fontWeight:String(node.styles.fontWeight || "400"),
-    fontStyle:node.styles.fontStyle || "normal", lineHeight:round(px(node.styles.lineHeight, fontSize * 1.2) / fontSize),
+    fontStyle:node.styles.fontStyle || "normal", lineHeight:round(lineHeight / fontSize),
     textAlign:align, textAlignVertical:node.tag === "button" ? "middle" : "top",
+    ...(String(node.styles.textDecorationLine || "").includes("underline") ? {underline:true} : {}),
+    ...(node.attributes.href ? {href:node.attributes.href} : {}),
   };
 }
 
 function controlText(node, parent) {
   if (!["input", "textarea", "select"].includes(node.tag) || !isVisible(node)) return null;
   if (["checkbox", "radio", "range", "file", "hidden"].includes(node.attributes.type)) return null;
+  const hasValue = Boolean(node.attributes.selectedLabel || node.attributes.value);
   const content = node.attributes.selectedLabel || node.attributes.value || node.attributes.placeholder;
   if (!content) return null;
   const fontSize = px(node.styles.fontSize, 14);
-  const horizontalPadding = Math.min(12, Math.max(6, node.rect.height / 3));
+  const horizontalPadding = px(node.styles.paddingLeft, Math.min(12, Math.max(6, node.rect.height / 3)));
+  const verticalPadding = px(node.styles.paddingTop, 0);
+  const lineHeight = px(node.styles.lineHeight, fontSize * 1.2);
+  const multiline = node.tag === "textarea";
   return {
     type:"text", name:`${semanticLayerName(node)} · Value`, layoutPosition:"absolute",
-    x:round(node.rect.x - parent.rect.x + horizontalPadding), y:round(node.rect.y - parent.rect.y),
-    width:round(Math.max(1, node.rect.width - horizontalPadding * 2)), height:round(node.rect.height),
-    textGrowth:"fixed-width-height", content,
-    fill:safeColor(node.styles.color) || "#000000", fontFamily:fontFamily(node.styles.fontFamily), fontSize:round(fontSize), fontWeight:String(node.styles.fontWeight || "400"),
-    fontStyle:node.styles.fontStyle || "normal", lineHeight:round(px(node.styles.lineHeight, fontSize * 1.2) / fontSize), textAlign:"left", textAlignVertical:node.tag === "textarea" ? "top" : "middle",
+    x:round(node.rect.x - parent.rect.x + horizontalPadding), y:round(node.rect.y - parent.rect.y + (multiline ? verticalPadding : Math.max(0,(node.rect.height - lineHeight) / 2))),
+    ...(multiline ? {width:round(Math.max(1,node.rect.width-horizontalPadding*2)),height:round(node.rect.height),textGrowth:"fixed-width-height"} : {textGrowth:"auto"}),
+    content,
+    fill:colorWithOpacity(safeColor(hasValue ? node.styles.color : node.attributes.placeholderColor), hasValue ? 1 : node.attributes.placeholderOpacity) || safeColor(node.styles.color) || "#000000", fontFamily:fontFamily(node.styles.fontFamily), fontSize:round(fontSize), fontWeight:String(node.styles.fontWeight || "400"),
+    fontStyle:node.styles.fontStyle || "normal", lineHeight:round(lineHeight / fontSize), textAlign:"left", ...(multiline ? {textAlignVertical:"top"} : {}),
   };
 }
 
@@ -262,16 +307,47 @@ function imageMode(node) {
 function svgGraphic(node, parent, byPath) {
   let svg = node;
   while (svg && svg.tag !== "svg") svg = byPath.get(svg.parentPath);
+  const viewBox = (svg?.attributes.viewBox || `0 0 ${svg?.rect.width || node.rect.width} ${svg?.rect.height || node.rect.height}`).split(/[\s,]+/).map(Number);
+  const strokeScale = svg && viewBox[2] > 0 && viewBox[3] > 0
+    ? Math.min(svg.rect.width / viewBox[2], svg.rect.height / viewBox[3])
+    : 1;
   const svgRelativeRect = svg ? {
     x:0, y:0, width:round(svg.rect.width), height:round(svg.rect.height),
   } : relativeRect(node, parent);
   const primitiveRect = svg ? {
     x:round(node.rect.x - svg.rect.x), y:round(node.rect.y - svg.rect.y), width:round(node.rect.width), height:round(node.rect.height),
   } : relativeRect(node, parent);
-  const base = { name:semanticLayerName(node), layoutPosition:"absolute", ...(node.tag === "path" ? svgRelativeRect : primitiveRect), ...graphicPaint(node) };
+  const base = { name:semanticLayerName(node), layoutPosition:"absolute", ...(node.tag === "path" ? svgRelativeRect : primitiveRect), ...graphicPaint(node, strokeScale) };
   if (node.tag === "rect") return { type:"rectangle", ...base, cornerRadius:round(px(node.attributes.rx || node.attributes.ry)) };
-  if (node.tag === "circle" || node.tag === "ellipse") return { type:"ellipse", ...base };
-  if (node.tag === "line") return { type:"path", ...base, width:Math.max(1, base.width), height:Math.max(1, base.height), geometry:`M 0 0 L ${Math.max(1, base.width)} ${Math.max(1, base.height)}`, viewBox:[0, 0, Math.max(1, base.width), Math.max(1, base.height)] };
+  if (node.tag === "circle" || node.tag === "ellipse") {
+    const dash = String(node.styles.strokeDasharray || "").match(/([\d.]+)px[, ]+([\d.]+)px/);
+    const progress = dash && Number(dash[2]) > 0 ? clamp(Number(dash[1]) / Number(dash[2])) : 1;
+    if (progress < 0.999) {
+      // Pencil's partial ellipse is a closed sector, so its stroke also draws
+      // radial edges. Progress rings need an open SVG arc instead.
+      const width = Math.max(1, base.width);
+      const height = Math.max(1, base.height);
+      const cx = width / 2;
+      const cy = height / 2;
+      const rx = width / 2;
+      const ry = height / 2;
+      const angle = Math.PI * 2 * progress;
+      const endX = cx + rx * Math.cos(angle);
+      const endY = cy + ry * Math.sin(angle);
+      const largeArc = progress > 0.5 ? 1 : 0;
+      return {
+        type:"path", ...base, width, height,
+        geometry:`M ${round(cx + rx)} ${round(cy)} A ${round(rx)} ${round(ry)} 0 ${largeArc} 1 ${round(endX)} ${round(endY)}`,
+        viewBox:[0, 0, width, height],
+      };
+    }
+    return { type:"ellipse", ...base };
+  }
+  if (node.tag === "line") {
+    const width = Math.max(1, base.width);
+    const height = Math.max(1, base.height);
+    return { type:"path", ...base, width, height, geometry:`M 0 0 L ${base.width === 0 ? 0 : width} ${base.height === 0 ? 0 : height}`, viewBox:[0, 0, width, height] };
+  }
   if (node.tag === "polyline" || node.tag === "polygon") {
     const numbers = node.attributes.points?.trim().split(/[\s,]+/).map(Number);
     if (!numbers?.length || numbers.some((value) => !Number.isFinite(value))) return null;
@@ -282,7 +358,6 @@ function svgGraphic(node, parent, byPath) {
     return { type:"path", ...base, geometry:`${commands}${node.tag === "polygon" ? " Z" : ""}`, viewBox:[Math.min(...xs), Math.min(...ys), Math.max(1, Math.max(...xs) - Math.min(...xs)), Math.max(1, Math.max(...ys) - Math.min(...ys))] };
   }
   if (node.tag === "path" && node.attributes.d) {
-    const viewBox = (svg?.attributes.viewBox || `0 0 ${svg?.rect.width || node.rect.width} ${svg?.rect.height || node.rect.height}`).split(/[\s,]+/).map(Number);
     return { type:"path", ...base, geometry:node.attributes.d, viewBox };
   }
   return null;
@@ -306,13 +381,13 @@ export function convertCaptureToPencil(capture) {
       stats.skippedRoots[node.tag] = (stats.skippedRoots[node.tag] || 0) + 1;
       return null;
     }
-    if ((!isCssShown(node) && !isVisibleSvgContainer(node)) || isVisuallyHiddenControl(node)) {
+    if ((!isCssShown(node) && !isVisibleSvgContainer(node)) || isVisuallyHiddenControl(node) || isVisuallyHiddenElement(node)) {
       stats.skipped += 1;
       if (node.namespace === "http://www.w3.org/2000/svg") stats.skippedSvgInvisible += 1;
       stats.skippedRoots[node.tag] = (stats.skippedRoots[node.tag] || 0) + 1;
       return null;
     }
-    if (!isVisible(node) && !isVisibleSvgContainer(node)) {
+    if (!isVisible(node) && !isVisibleSvgContainer(node) && !isVisibleSvgGraphic(node)) {
       const descendants = childPaths.get(node.path) || [];
       if (descendants.length) {
         const bridge = {type:"group",name:semanticLayerName(node),layoutPosition:"absolute",x:0,y:0,children:[]};
@@ -337,33 +412,54 @@ export function convertCaptureToPencil(capture) {
       const url = node.attributes.assetUrl || node.attributes.dataUrl || node.attributes.currentSrc || node.attributes.src;
       if (!url) { stats.skipped += 1; return null; }
       stats.images += 1;
-      return { type:"rectangle", name:semanticLayerName(node), layoutPosition:"absolute", ...relativeRect(node, parent), fill:{ type:"image", url, mode:node.tag === "img" ? imageMode(node) : "stretch" }, cornerRadius:cornerRadius(node.styles) };
+      const filter = node.attributes.effectiveFilter;
+      return { type:"rectangle", name:semanticLayerName(node), layoutPosition:"absolute", ...relativeRect(node, parent), fill:{ type:"image", url, mode:node.tag === "img" ? imageMode(node) : "stretch" }, cornerRadius:cornerRadius(node.styles), ...(filter && filter !== "none" ? {metadata:{type:"pencil-capture-image",filter}} : {}) };
     }
     const backgroundFill = cssBackgroundToFill(node);
     const backgroundColor = safeColor(node.styles.backgroundColor);
-    const effect = cssShadowToEffect(node.styles.boxShadow);
-    const border = borderProperties(node.styles);
+    const shadows = parseCssShadows(node.styles.boxShadow);
+    const border = Object.keys(borderProperties(node.styles)).length ? borderProperties(node.styles) : shadowRingBorder(shadows);
+    const effects = shadows.filter((shadow) => !(border.stroke === shadow.color && border.strokeWidth === shadow.spread && shadow.offset.x === 0 && shadow.offset.y === 0 && shadow.blur === 0));
     let frameRect = relativeRect(node, parent);
-    if (node.namespace === "http://www.w3.org/2000/svg" && node.tag !== "svg") {
+    if (node.namespace === "http://www.w3.org/2000/svg" && node.tag === "g") {
       let svg = node;
       while (svg && svg.tag !== "svg") svg = byPath.get(svg.parentPath);
       if (svg) frameRect = {x:0,y:0,width:round(svg.rect.width),height:round(svg.rect.height)};
+    } else if (node.namespace === "http://www.w3.org/2000/svg" && byPath.get(node.parentPath)?.tag === "g") {
+      let svg = node;
+      while (svg && svg.tag !== "svg") svg = byPath.get(svg.parentPath);
+      if (svg) frameRect = {x:round(node.rect.x-svg.rect.x),y:round(node.rect.y-svg.rect.y),width:round(node.rect.width),height:round(node.rect.height)};
     }
-    const painted = node.path === capture.rootPath || Boolean(backgroundFill || backgroundColor || border.stroke || effect);
-    const frame = painted ? {
+    const clipped = ["hidden", "clip"].includes(node.styles.overflow);
+    const framed = node.path === capture.rootPath || Boolean(backgroundFill || backgroundColor || border.stroke || effects.length || clipped);
+    const frame = framed ? {
       type:"frame", name:semanticLayerName(node), layout:"none", layoutPosition:"absolute",
       ...frameRect, cornerRadius:cornerRadius(node.styles),
       ...(backgroundFill ? { fill:backgroundFill } : backgroundColor ? { fill:backgroundColor } : {}),
-      ...border, ...(effect ? { effect } : {}),
+      ...border, ...(effects.length ? { effect:effects.length === 1 ? effects[0] : effects } : {}), ...(clipped ? { clip:true } : {}),
       ...(px(node.styles.opacity, 1) < 1 ? { opacity:round(px(node.styles.opacity, 1)) } : {}), children:[],
     } : {
       type:"group", name:semanticLayerName(node), layoutPosition:"absolute", x:frameRect.x, y:frameRect.y,
       ...(px(node.styles.opacity, 1) < 1 ? { opacity:round(px(node.styles.opacity, 1)) } : {}), children:[],
     };
-    if (painted) stats.frames += 1; else stats.groups += 1;
+    if (framed) stats.frames += 1; else stats.groups += 1;
     if (backgroundFill?.type === "image") stats.images += 1;
     if (backgroundFill?.type === "gradient") stats.gradients += 1;
-    if (node.text && (!node.textRect || (node.textRect.width > 0 && node.textRect.height > 0))) { frame.children.push(makeText(node, node)); stats.texts += 1; }
+    const textRuns = Array.isArray(node.textRuns)
+      ? node.textRuns.filter((run) => run?.text && run.rect?.width > 0 && run.rect?.height > 0)
+      : [];
+    if (textRuns.length) {
+      textRuns.forEach((run, index) => frame.children.push(makeText(
+        node,
+        node,
+        `${semanticLayerName(node)} · Text${textRuns.length > 1 ? ` · Line ${index + 1}` : ""}`,
+        run,
+      )));
+      stats.texts += textRuns.length;
+    } else if (node.text && (!node.textRect || (node.textRect.width > 0 && node.textRect.height > 0))) {
+      frame.children.push(makeText(node, node));
+      stats.texts += 1;
+    }
     const control = controlText(node, node);
     if (control) { frame.children.push(control); stats.controls += 1; }
     for (const path of childPaths.get(node.path) || []) {

@@ -53,6 +53,74 @@ describe("convertCaptureToPencil", () => {
     expect(path).toMatchObject({x:0,y:0,width:16,height:16,viewBox:[0,0,24,24]});
   });
 
+  test("keeps zero-dimension SVG strokes and positions SVG text", () => {
+    const svgStyles = { ...rootStyles, backgroundColor:"transparent", overflow:"hidden", fill:"none", fillOpacity:"1", stroke:"rgb(12, 12, 9)", strokeOpacity:"1", strokeWidth:"2px", color:"rgb(12, 12, 9)", fontFamily:"Noto Sans", fontSize:"12px", fontWeight:"400", fontStyle:"normal", lineHeight:"16px", textAlign:"start", textTransform:"none" };
+    const capture = { format:"pencil-capture-ir", version:1, rootPath:"0", label:"SVG labels", source:{}, nodes:[
+      { path:"0", parentPath:null, tag:"div", name:"root", text:null, rect:{x:0,y:0,width:200,height:100}, attributes:{}, styles:rootStyles },
+      { path:"0.0", parentPath:"0", tag:"svg", namespace:"http://www.w3.org/2000/svg", name:"chart", text:null, rect:{x:20,y:20,width:160,height:60}, attributes:{viewBox:"0 0 160 60"}, styles:svgStyles },
+      { path:"0.0.0", parentPath:"0.0", tag:"path", namespace:"http://www.w3.org/2000/svg", name:"horizontal", text:null, rect:{x:30,y:50,width:40,height:0}, attributes:{d:"M 10 30 H 50"}, styles:svgStyles },
+      { path:"0.0.1", parentPath:"0.0", tag:"text", namespace:"http://www.w3.org/2000/svg", name:"axis-label", text:"Jan", textRect:{x:42,y:62,width:18,height:16}, textRuns:[{text:"Jan",rect:{x:42,y:62,width:18,height:16}}], rect:{x:42,y:62,width:18,height:16}, attributes:{}, styles:{...svgStyles,fill:"rgb(12, 12, 9)",stroke:"none"} },
+    ] };
+    const svg = convertCaptureToPencil(capture).root.children[0];
+    expect(svg).toMatchObject({type:"frame",x:20,y:20,width:160,height:60,clip:true});
+    expect(svg.children[0]).toMatchObject({type:"path",width:160,height:60,viewBox:[0,0,160,60]});
+    expect(svg.children[1]).toMatchObject({x:22,y:42});
+    expect(svg.children[1].children[0]).toMatchObject({content:"Jan",textGrowth:"auto",x:0,y:0});
+  });
+
+  test("positions SVG text against the SVG viewport when its g wrapper is expanded", () => {
+    const styles = {...rootStyles,backgroundColor:"transparent",fill:"rgb(12, 12, 9)",stroke:"none",color:"rgb(12, 12, 9)",fontFamily:"Noto Sans",fontSize:"24px",fontWeight:"700",lineHeight:"32px",textAlign:"start",textTransform:"none"};
+    const capture = {format:"pencil-capture-ir",version:1,rootPath:"0",label:"Donut",source:{},nodes:[
+      {path:"0",parentPath:null,tag:"div",name:"root",text:null,rect:{x:0,y:0,width:240,height:240},attributes:{},styles:rootStyles},
+      {path:"0.0",parentPath:"0",tag:"svg",namespace:"http://www.w3.org/2000/svg",name:"chart",text:null,rect:{x:20,y:20,width:190,height:190},attributes:{viewBox:"0 0 190 190"},styles},
+      {path:"0.0.0",parentPath:"0.0",tag:"g",namespace:"http://www.w3.org/2000/svg",name:"layer",text:null,rect:{x:50,y:40,width:130,height:120},attributes:{},styles},
+      {path:"0.0.0.0",parentPath:"0.0.0",tag:"text",namespace:"http://www.w3.org/2000/svg",name:"center",text:null,rect:{x:94,y:80,width:42,height:47},attributes:{x:"95",y:"95"},styles},
+      {path:"0.0.0.0.0",parentPath:"0.0.0.0",tag:"tspan",namespace:"http://www.w3.org/2000/svg",name:"935",text:"935",textRect:{x:94,y:80,width:42,height:33},textRuns:[{text:"935",rect:{x:94,y:80,width:42,height:33}}],rect:{x:94,y:80,width:42,height:33},attributes:{x:"95",y:"79"},styles},
+    ]};
+    const text = convertCaptureToPencil(capture).root.children[0].children[0].children[0];
+    expect(text).toMatchObject({x:74,y:60});
+  });
+
+  test("scales SVG strokes and converts progress circle dash arrays", () => {
+    const styles = { ...rootStyles, backgroundColor:"transparent", fill:"none", fillOpacity:"1", stroke:"rgb(187, 77, 0)", strokeOpacity:"1", strokeWidth:"12px", strokeDasharray:"179.822px, 267.035px", opacity:"0.2" };
+    const capture = { format:"pencil-capture-ir", version:1, rootPath:"0", label:"Progress", source:{}, nodes:[
+      { path:"0", parentPath:null, tag:"div", name:"root", text:null, rect:{x:0,y:0,width:40,height:40}, attributes:{}, styles:rootStyles },
+      { path:"0.0", parentPath:"0", tag:"svg", namespace:"http://www.w3.org/2000/svg", name:"progress", text:null, rect:{x:12,y:12,width:16,height:16}, attributes:{viewBox:"0 0 100 100"}, styles },
+      { path:"0.0.0", parentPath:"0.0", tag:"circle", namespace:"http://www.w3.org/2000/svg", name:"value", text:null, rect:{x:13.2,y:13.2,width:13.6,height:13.6}, attributes:{cx:"50",cy:"50",r:"42.5"}, styles },
+    ] };
+    const circle = convertCaptureToPencil(capture).root.children[0].children[0];
+    expect(circle).toMatchObject({type:"path",fill:"#00000000",strokeWidth:1.92,opacity:0.2,viewBox:[0,0,13.6,13.6]});
+    expect(circle.geometry).toMatch(/^M 13\.6 6\.8 A 6\.8 6\.8 0 1 1 /);
+  });
+
+  test("turns shadcn shadow rings into editable card strokes", () => {
+    const styles = {...rootStyles,backgroundColor:"rgb(255, 255, 255)",boxShadow:"rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.153 -0.00176424 0.00573476 / 0.1) 0px 0px 0px 1px",borderTopWidth:"0px",borderRightWidth:"0px",borderBottomWidth:"0px",borderLeftWidth:"0px"};
+    const capture = {format:"pencil-capture-ir",version:1,rootPath:"0",label:"Card",source:{},nodes:[
+      {path:"0",parentPath:null,tag:"div",name:"card",text:null,rect:{x:0,y:0,width:320,height:200},attributes:{},styles},
+    ]};
+    expect(convertCaptureToPencil(capture).root).toMatchObject({stroke:"#0C0C091A",strokeWidth:1,strokeAlignment:"inner"});
+  });
+
+  test("uses placeholder pseudo color and native control padding", () => {
+    const styles = {...rootStyles,backgroundColor:"rgb(255, 255, 255)",color:"rgb(12, 12, 9)",fontFamily:"Noto Sans",fontSize:"14px",fontWeight:"400",fontStyle:"normal",lineHeight:"20px",paddingTop:"8px",paddingLeft:"10px"};
+    const capture = {format:"pencil-capture-ir",version:1,rootPath:"0",label:"Form",source:{},nodes:[
+      {path:"0",parentPath:null,tag:"div",name:"root",text:null,rect:{x:0,y:0,width:320,height:100},attributes:{},styles:rootStyles},
+      {path:"0.0",parentPath:"0",tag:"textarea",name:"bio",text:null,rect:{x:20,y:12,width:280,height:64},attributes:{placeholder:"Tell us more",placeholderColor:"oklch(0.58 0.031 107.3)",placeholderOpacity:"1"},styles},
+    ]};
+    const value = convertCaptureToPencil(capture).root.children[0].children[0];
+    expect(value).toMatchObject({content:"Tell us more",x:10,y:8,fill:"#7C7C67"});
+  });
+
+  test("preserves anchor underline and href", () => {
+    const styles = {...rootStyles,backgroundColor:"transparent",color:"rgb(12, 12, 9)",fontFamily:"Noto Sans",fontSize:"14px",fontWeight:"400",fontStyle:"normal",lineHeight:"20px",textAlign:"start",textTransform:"none",textDecorationLine:"underline"};
+    const capture = {format:"pencil-capture-ir",version:1,rootPath:"0",label:"Link",source:{},nodes:[
+      {path:"0",parentPath:null,tag:"div",name:"root",text:null,rect:{x:0,y:0,width:200,height:40},attributes:{},styles:rootStyles},
+      {path:"0.0",parentPath:"0",tag:"a",name:"email settings",text:"email settings",textRect:{x:10,y:10,width:92,height:20},textRuns:[{text:"email settings",rect:{x:10,y:10,width:92,height:20}}],rect:{x:10,y:10,width:92,height:20},attributes:{href:"https://example.com/settings"},styles},
+    ]};
+    const text = convertCaptureToPencil(capture).root.children[0].children[0];
+    expect(text).toMatchObject({content:"email settings",underline:true,href:"https://example.com/settings"});
+  });
+
   test("keeps visible SVG descendants behind zero-sized responsive wrappers", () => {
     const styles = { ...rootStyles, backgroundColor:"transparent", fill:"oklch(0.769 0.188 70.08)", stroke:"none", strokeWidth:"0" };
     const capture = { format:"pencil-capture-ir", version:1, rootPath:"0", label:"Responsive chart", source:{}, nodes:[
@@ -81,7 +149,7 @@ describe("convertCaptureToPencil", () => {
     const paragraph = section.children[0];
     expect(section).toMatchObject({ type:"group", x:40, y:30 });
     expect(paragraph).toMatchObject({ type:"group", x:20, y:20 });
-    expect(paragraph.children[0]).toMatchObject({ type:"text", x:4, y:4, width:80, height:20 });
+    expect(paragraph.children[0]).toMatchObject({ type:"text", x:4, y:4, width:83.2, height:20, textGrowth:"fixed-width-height" });
   });
 
   test("uses bounds-free groups for transparent semantic wrappers", () => {
@@ -93,7 +161,7 @@ describe("convertCaptureToPencil", () => {
     const label = convertCaptureToPencil(capture).root.children[0];
     expect(label).toMatchObject({type:"group",x:10,y:10});
     expect(label).not.toHaveProperty("width");
-    expect(label.children[0]).toMatchObject({x:0,y:-3,width:40,height:19});
+    expect(label.children[0]).toMatchObject({x:0,y:-3,width:42,height:19,textGrowth:"fixed-width-height"});
   });
 
   test("drops one-pixel accessibility controls while keeping their visible replacement", () => {
@@ -106,6 +174,55 @@ describe("convertCaptureToPencil", () => {
     const result = convertCaptureToPencil(capture);
     expect(result.root.children).toHaveLength(1);
     expect(result.stats.skipped).toBe(1);
+  });
+
+  test("drops sr-only semantic text instead of rendering it over visible content", () => {
+    const styles = { ...rootStyles, backgroundColor:"transparent", color:"rgb(0, 0, 0)", fontFamily:"Noto Sans", fontSize:"14px", fontWeight:"400", lineHeight:"20px", textAlign:"start", textTransform:"none" };
+    const capture = { format:"pencil-capture-ir", version:1, rootPath:"0", label:"Accessible field", source:{}, nodes:[
+      { path:"0", parentPath:null, tag:"div", name:"root", text:null, rect:{x:0,y:0,width:320,height:120}, attributes:{}, styles:rootStyles },
+      { path:"0.0", parentPath:"0", tag:"legend", name:"field-legend", text:"Private activity", textRect:{x:12,y:12,width:102,height:20}, rect:{x:11,y:11,width:1,height:1}, attributes:{}, styles:{...styles,position:"absolute",overflow:"hidden"} },
+      { path:"0.1", parentPath:"0", tag:"label", name:"field-label", text:"Hide activity", textRect:{x:32,y:24,width:82,height:20}, rect:{x:32,y:24,width:82,height:20}, attributes:{}, styles },
+    ] };
+    const result = convertCaptureToPencil(capture);
+    expect(result.root.children).toHaveLength(1);
+    expect(result.root.children[0].children[0]).toMatchObject({content:"Hide activity"});
+    expect(result.stats.skipped).toBe(1);
+  });
+
+  test("keeps intrinsically-sized single-line text unwrapped", () => {
+    const styles = { ...rootStyles, backgroundColor:"transparent", color:"rgb(0, 0, 0)", fontFamily:"Noto Sans", fontSize:"14px", fontWeight:"500", lineHeight:"20px", textAlign:"center", textTransform:"none" };
+    const capture = { format:"pencil-capture-ir", version:1, rootPath:"0", label:"Empty state", source:{}, nodes:[
+      { path:"0", parentPath:null, tag:"div", name:"root", text:null, rect:{x:0,y:0,width:320,height:120}, attributes:{}, styles:rootStyles },
+      { path:"0.0", parentPath:"0", tag:"div", name:"empty-title", text:"404 - Not Found", textRect:{x:109,y:20,width:102,height:20}, rect:{x:109,y:20,width:102,height:20}, attributes:{}, styles },
+    ] };
+    const text = convertCaptureToPencil(capture).root.children[0].children[0];
+    expect(text).toMatchObject({textGrowth:"auto",x:0,y:0});
+    expect(text).not.toHaveProperty("width");
+    expect(text).not.toHaveProperty("height");
+  });
+
+  test("preserves separate editable direct-text line runs", () => {
+    const styles = { ...rootStyles, backgroundColor:"transparent", color:"rgb(0, 0, 0)", fontFamily:"Noto Sans", fontSize:"14px", fontWeight:"400", lineHeight:"20px", textAlign:"start", textTransform:"none" };
+    const capture = { format:"pencil-capture-ir", version:1, rootPath:"0", label:"Inline text", source:{}, nodes:[
+      { path:"0", parentPath:null, tag:"div", name:"root", text:null, rect:{x:0,y:0,width:320,height:120}, attributes:{}, styles:rootStyles },
+      { path:"0.0", parentPath:"0", tag:"p", name:"description", text:"before after", textRect:{x:20,y:20,width:160,height:40}, textRuns:[
+        {text:"before",rect:{x:20,y:20,width:42,height:20}},
+        {text:"after",rect:{x:88,y:40,width:34,height:20}},
+      ], rect:{x:20,y:20,width:280,height:40}, attributes:{}, styles },
+    ] };
+    const paragraph = convertCaptureToPencil(capture).root.children[0];
+    expect(paragraph.children).toHaveLength(2);
+    expect(paragraph.children[0]).toMatchObject({content:"before",x:0,y:0,textGrowth:"auto"});
+    expect(paragraph.children[1]).toMatchObject({content:"after",x:68,y:20,textGrowth:"auto"});
+  });
+
+  test("uses clipping frames for transparent overflow wrappers", () => {
+    const styles = { ...rootStyles, backgroundColor:"transparent", overflow:"hidden" };
+    const capture = { format:"pencil-capture-ir", version:1, rootPath:"0", label:"Clipped", source:{}, nodes:[
+      { path:"0", parentPath:null, tag:"div", name:"root", text:null, rect:{x:0,y:0,width:200,height:100}, attributes:{}, styles:rootStyles },
+      { path:"0.0", parentPath:"0", tag:"span", name:"badge", text:null, rect:{x:10,y:10,width:80,height:20}, attributes:{}, styles },
+    ] };
+    expect(convertCaptureToPencil(capture).root.children[0]).toMatchObject({type:"frame",clip:true,x:10,y:10,width:80,height:20});
   });
 
   test("creates editable image fills for img and CSS background URLs", () => {

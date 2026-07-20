@@ -21,6 +21,7 @@ describe("extension clipboard contract", () => {
     const manifest = JSON.parse(await readFile(new URL("../extension/manifest.json", import.meta.url), "utf8"));
     expect(manifest.action.default_icon["16"]).toBe("icons/icon-16.png");
     expect(manifest.icons["128"]).toBe("icons/icon-128.png");
+    expect(manifest.host_permissions).toEqual(["<all_urls>"]);
   });
 });
 

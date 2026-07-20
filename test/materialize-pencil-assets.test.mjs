@@ -2,7 +2,13 @@ import { expect, test } from "bun:test";
 import { mkdtemp, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { materializePencilAssets } from "../src/materialize-pencil-assets.mjs";
+import { imageMagickArgsForCssFilter, materializePencilAssets } from "../src/materialize-pencil-assets.mjs";
+
+test("maps supported CSS image filters to ImageMagick operations", () => {
+  expect(imageMagickArgsForCssFilter("brightness(0.6) grayscale(1)")).toEqual([
+    "-evaluate", "Multiply", "0.6", "-colorspace", "gray", "-colorspace", "sRGB",
+  ]);
+});
 
 test("materializes image fills and deduplicates identical assets", async () => {
   const outputDir = await mkdtemp(join(tmpdir(), "pencil-assets-"));

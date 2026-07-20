@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "Copy rendered web elements as editable layers for Pencil",
   "permissions": ["activeTab", "scripting"],
+  "host_permissions": ["<all_urls>"],
   "action": {
     "default_title": "Capture an element for Pencil",
     "default_icon": {

@@ -4,6 +4,18 @@ import { isPageCaptureShortcut, pageCaptureModifier } from "./shortcuts.mjs";
 const CONTROLLER_KEY = "__pencilCaptureController";
 const REQUEST_EVENT = "pencil-capture:copy-request";
 const RESPONSE_EVENT = "pencil-capture:copy-response";
+const ASSET_REQUEST_EVENT = "pencil-capture:asset-request";
+const ASSET_RESPONSE_EVENT = "pencil-capture:asset-response";
+
+document.documentElement.setAttribute("data-pencil-capture-extension", "ready");
+globalThis.addEventListener(ASSET_REQUEST_EVENT, async (event) => {
+  let request;
+  try { request = JSON.parse(event.detail); } catch { return; }
+  const response = await chrome.runtime.sendMessage({type:"pencil-capture:fetch-asset",url:request.url});
+  globalThis.dispatchEvent(new CustomEvent(ASSET_RESPONSE_EVENT, {
+    detail:JSON.stringify({id:request.id,dataUrl:response?.ok ? response.dataUrl : null}),
+  }));
+});
 
 function copyDesign(selector) {
   const id = crypto.randomUUID();
