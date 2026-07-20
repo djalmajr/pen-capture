@@ -1,4 +1,4 @@
-import { captureElement } from "./capture-element.mjs";
+import { captureElement, hydrateFilteredImageAssets } from "./capture-element.mjs";
 import { convertCaptureToPencil } from "./convert-capture.mjs";
 import { inlineCaptureAssets } from "./inline-assets.mjs";
 
@@ -36,6 +36,7 @@ export function createPencilClipboardHtml(nodes, source) {
 
 export async function captureElementForPencil(element, options = {}) {
   const capture = captureElement(element, options);
+  await hydrateFilteredImageAssets(capture, element);
   if (options.inlineAssets === true) await inlineCaptureAssets(capture, options);
   const converted = convertCaptureToPencil(capture);
   return {

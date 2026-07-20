@@ -70,6 +70,52 @@ function filteredImageSnapshot(node, computed, rect) {
   return output.toDataURL("image/png");
 }
 
+async function fetchedFilteredImageSnapshot(node, captured) {
+  const response = await fetch(node.currentSrc || node.src);
+  if (!response.ok) throw new Error(`Unable to fetch filtered image: ${response.status}`);
+  const bitmap = await createImageBitmap(await response.blob());
+  try {
+    const scaleFactor = Math.min(2, globalThis.devicePixelRatio || 1);
+    const width = Math.max(1, Math.ceil(captured.rect.width * scaleFactor));
+    const height = Math.max(1, Math.ceil(captured.rect.height * scaleFactor));
+    const output = document.createElement("canvas");
+    output.width = width;
+    output.height = height;
+    const context = output.getContext("2d");
+    context.fillStyle = nearestOpaqueBackground(node);
+    context.fillRect(0, 0, width, height);
+    context.filter = captured.styles.filter;
+    const fit = captured.styles.objectFit;
+    const scale = fit === "contain"
+      ? Math.min(width / bitmap.width, height / bitmap.height)
+      : fit === "cover"
+        ? Math.max(width / bitmap.width, height / bitmap.height)
+        : null;
+    if (scale == null) context.drawImage(bitmap, 0, 0, width, height);
+    else {
+      const drawWidth = bitmap.width * scale;
+      const drawHeight = bitmap.height * scale;
+      context.drawImage(bitmap, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+    }
+    return output.toDataURL("image/png");
+  } finally {
+    bitmap.close?.();
+  }
+}
+
+export async function hydrateFilteredImageAssets(capture, root) {
+  const byPath = new Map(capture.nodes.map((node) => [node.path, node]));
+  const visit = async (node, path) => {
+    const captured = byPath.get(path);
+    if (node.tagName === "IMG" && captured?.styles.filter && captured.styles.filter !== "none" && !captured.attributes.dataUrl) {
+      try { captured.attributes.dataUrl = await fetchedFilteredImageSnapshot(node, captured); } catch { captured.attributes.dataUrl = null; }
+    }
+    await Promise.all(Array.from(node.children).map((child, index) => visit(child, `${path}.${index}`)));
+  };
+  await visit(root, "0");
+  return capture;
+}
+
 function directTextSnapshot(node, rootRect) {
   const textNodes = Array.from(node.childNodes).filter((child) => child.nodeType === Node.TEXT_NODE && child.textContent?.trim());
   const text = textNodes.map((child) => child.textContent).join("").replace(/\s+/g, " ").trim();
