@@ -12,7 +12,7 @@ export const CAPTURED_STYLE_KEYS = [
   "borderTopLeftRadius", "borderTopRightRadius", "borderBottomRightRadius", "borderBottomLeftRadius",
   "fontFamily", "fontSize", "fontStyle", "fontWeight", "letterSpacing", "lineHeight",
   "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
-  "textAlign", "textTransform", "textDecorationLine", "textDecorationColor", "textDecorationThickness", "textUnderlineOffset", "whiteSpace", "textOverflow", "opacity", "overflow", "visibility", "boxShadow",
+  "textAlign", "textTransform", "textDecorationLine", "textDecorationColor", "textDecorationThickness", "textUnderlineOffset", "whiteSpace", "textOverflow", "webkitLineClamp", "webkitBoxOrient", "opacity", "overflow", "visibility", "boxShadow",
   "objectFit", "objectPosition", "filter", "mixBlendMode",
   "fill", "fillOpacity", "stroke", "strokeWidth", "strokeOpacity", "strokeDasharray", "strokeDashoffset",
   "stopColor", "stopOpacity",
@@ -178,36 +178,72 @@ export async function hydrateFilteredImageAssets(capture, root) {
   return capture;
 }
 
-function directTextSnapshot(node, rootRect) {
+function ellipsisWidth(computed) {
+  const context = document.createElement("canvas").getContext("2d");
+  if (!context) return Number.parseFloat(computed.fontSize) * 0.75;
+  context.font = computed.font || `${computed.fontStyle} ${computed.fontWeight} ${computed.fontSize} ${computed.fontFamily}`;
+  return context.measureText("...").width;
+}
+
+function directTextSnapshot(node, rootRect, computed) {
+  const nodeRect = node.getBoundingClientRect();
   const textNodes = Array.from(node.childNodes).filter((child) => child.nodeType === Node.TEXT_NODE && child.textContent?.trim());
-  const runs = [];
-  for (const textNode of textNodes) {
-    const lines = [];
+  const lines = [];
+  for (const [sourceIndex, textNode] of textNodes.entries()) {
     for (let index = 0; index < textNode.length; index += 1) {
       const range = document.createRange();
       range.setStart(textNode, index);
       range.setEnd(textNode, index + 1);
       const rect = range.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) continue;
-      let line = lines.find((candidate) => Math.abs(candidate.top - rect.top) <= 1);
+      let line = lines.find((candidate) => candidate.sourceIndex === sourceIndex && Math.abs(candidate.top - rect.top) <= 1);
       if (!line) {
-        line = {top:rect.top,entries:[]};
+        line = {top:rect.top,sourceIndex,entries:[]};
         lines.push(line);
       }
       line.entries.push({character:textNode.data[index],rect});
     }
-    for (const line of lines) {
-      while (line.entries.length && /\s/.test(line.entries[0].character)) line.entries.shift();
-      while (line.entries.length && /\s/.test(line.entries.at(-1).character)) line.entries.pop();
-      if (!line.entries.length) continue;
-      const text = line.entries.map((entry) => entry.character).join("").replace(/\s+/g," ");
-      const left = Math.min(...line.entries.map((entry) => entry.rect.left));
-      const top = Math.min(...line.entries.map((entry) => entry.rect.top));
-      const right = Math.max(...line.entries.map((entry) => entry.rect.right));
-      const bottom = Math.max(...line.entries.map((entry) => entry.rect.bottom));
-      runs.push({text,rect:{x:left-rootRect.x,y:top-rootRect.y,width:right-left,height:bottom-top}});
-    }
   }
+  lines.sort((left, right) => left.top - right.top || left.entries[0]?.rect.left - right.entries[0]?.rect.left);
+  for (const line of lines) {
+    while (line.entries.length && /\s/.test(line.entries[0].character)) line.entries.shift();
+    while (line.entries.length && /\s/.test(line.entries.at(-1).character)) line.entries.pop();
+  }
+  const populatedLines = lines.filter((line) => line.entries.length);
+  const lineClamp = Number.parseInt(computed.webkitLineClamp, 10);
+  const clipsOverflow = ["hidden", "clip"].includes(computed.overflow);
+  const clampsLines = clipsOverflow && Number.isFinite(lineClamp) && lineClamp > 0;
+  let visibleLines = populatedLines;
+  let truncated = false;
+  if (clampsLines) {
+    const onscreenLines = populatedLines
+      .filter((line) => line.entries.some((entry) => entry.rect.bottom > nodeRect.top && entry.rect.top < nodeRect.bottom - 0.5));
+    const visibleTops = [];
+    for (const line of onscreenLines) {
+      if (visibleTops.some((top) => Math.abs(top - line.top) <= 1)) continue;
+      if (visibleTops.length === lineClamp) break;
+      visibleTops.push(line.top);
+    }
+    visibleLines = onscreenLines.filter((line) => visibleTops.some((top) => Math.abs(top - line.top) <= 1));
+    truncated = visibleLines.length < populatedLines.length;
+  } else if (clipsOverflow && computed.textOverflow === "ellipsis" && computed.whiteSpace === "nowrap" && node.scrollWidth > node.clientWidth + 0.5) {
+    const availableRight = nodeRect.right - ellipsisWidth(computed);
+    visibleLines = populatedLines.slice(0, 1).map((line) => {
+      const entries = line.entries.filter((entry) => entry.rect.left < availableRight);
+      truncated = entries.length < line.entries.length;
+      return {...line,entries};
+    });
+  }
+  const runs = visibleLines.flatMap((line, index) => {
+    if (!line.entries.length) return [];
+    let text = line.entries.map((entry) => entry.character).join("").replace(/\s+/g," ");
+    if (truncated && index === visibleLines.length - 1) text = `${text.replace(/[.\s]+$/g, "")}...`;
+    const left = Math.min(...line.entries.map((entry) => entry.rect.left));
+    const top = Math.min(...line.entries.map((entry) => entry.rect.top));
+    const right = Math.max(...line.entries.map((entry) => entry.rect.right));
+    const bottom = Math.max(...line.entries.map((entry) => entry.rect.bottom));
+    return [{text,rect:{x:left-rootRect.x,y:top-rootRect.y,width:right-left,height:bottom-top}}];
+  });
   if (!runs.length) return {text:null,textRect:null,textRuns:[]};
   const left = Math.min(...runs.map((run) => run.rect.x));
   const top = Math.min(...runs.map((run) => run.rect.y));
@@ -229,7 +265,7 @@ export function captureElement(root, options = {}) {
   const visit = (node, path, parentPath) => {
     const rect = node.getBoundingClientRect();
     const computed = getComputedStyle(node);
-    const { text, textRect, textRuns } = directTextSnapshot(node, rootRect);
+    const { text, textRect, textRuns } = directTextSnapshot(node, rootRect, computed);
     const attributes = Object.fromEntries(Array.from(node.attributes)
       .filter((attribute) => CAPTURED_ATTRIBUTES.has(attribute.name))
       .map((attribute) => [attribute.name, attribute.value]));

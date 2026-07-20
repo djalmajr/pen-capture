@@ -23,6 +23,8 @@ Direct extension paste runs in Pencil-safe asset mode. Remote `http(s)` images r
 
 Before serialization, the extension waits for SVG geometry to stabilize so animated Recharts paths are not copied mid-transition. The color converter supports the computed `rgb()`, `oklab()`, `oklch()` and `lab()` forms used by current Tailwind/shadcn output, including small empty status bullets. Transparent CSS gradients are layered above their background color instead of replacing it. SVG `linearGradient` paint servers preserve their stops and combined opacity; sharp repeating-linear patterns become clipped editable vector strokes so their spacing remains uniform in Pencil.
 
+Visible text truncation is preserved as editable content. Multi-line `-webkit-line-clamp` regions discard hidden lines and append `...` to the last visible run, while single-line `text-overflow: ellipsis` labels receive the marker only when their measured content actually overflows.
+
 The neutral `*.capture.json` IR and conversion CLI remain available for diagnostics, repeatable MCP imports, and regression tests. They are no longer the extension's clipboard format.
 
 For durable, maximum-fidelity project captures, set `PENCIL_CAPTURE_MATERIALIZE_DIR` while running the clipboard smoke workflow or use the CLI/MCP import. Image and canvas fills are downloaded or decoded into project-local files, and the clipboard payload is rewritten to use paths relative to the `.pen` document. This is the required path when canvas pixels or filtered raster output must be preserved.
