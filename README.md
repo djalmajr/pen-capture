@@ -56,7 +56,7 @@ The two shadcn amber/olive previews in [`fixtures/shadcn/catalog.json`](fixtures
 
 Absolute positions are retained for fidelity, but the original DOM parent/child hierarchy is reconstructed with coordinates relative to each semantic frame. HTML backgrounds, text, form values, SVG paths and common SVG primitives remain editable. `<img>`, CSS image backgrounds and canvas content use Pencil image fills; remote assets are inlined when possible. Linear and repeating-linear gradients are translated to native Pencil gradients. Auto Layout inference, pseudo-elements, masks and component recognition remain explicit follow-up capabilities.
 
-`examples.pen` contains both catalogs grouped by source and column. The CLI never edits it directly; generated batches are applied through Pencil MCP.
+`examples.pen` currently contains the consolidated `preview` capture. The `preview-02` capture is intentionally gated until the first reference is visually approved. The CLI never edits `.pen` files directly; generated batches are applied through Pencil MCP.
 
 Pencil currently needs nested catalog captures to be materialized once with `Copy` after insertion. Because copying regenerates descendant IDs, the import workflow finishes by querying the copied subtree and normalizing every layer to `Name (#currentId)`.
 
@@ -67,6 +67,9 @@ The acceptance flow produces a browser screenshot, exports the corresponding Pen
 ```sh
 bun run capture:source -- <url> <selector> artifacts/source.png
 bun run compare:visual -- artifacts/source.png artifacts/pencil.png artifacts/comparison
+bun run compare:visual -- artifacts/source.png artifacts/pencil.png artifacts/comparison --require-same-size --max-rmse 0.10
 ```
 
-The output includes `report.json`, `report.html`, `side-by-side.png`, `diff.png` and the normalized Pencil render used for pixel comparison.
+The source capture waits for network idle, web fonts, reduced motion and a configurable settle interval (`PENCIL_CAPTURE_SETTLE_MS`, default `500`). The comparison output includes `report.json`, `report.html`, `side-by-side.png`, `diff.png` and the normalized Pencil render used for pixel comparison. Acceptance flags make the command exit unsuccessfully if dimensions differ or normalized RMSE exceeds the declared limit.
+
+Current per-page evidence and known residual differences are recorded under [`docs/acceptance`](docs/acceptance).

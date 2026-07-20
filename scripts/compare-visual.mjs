@@ -2,10 +2,30 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import { spawn } from "node:child_process";
 
-const [sourcePath, pencilPath, outputDirectory] = process.argv.slice(2);
+const args = process.argv.slice(2);
+const [sourcePath, pencilPath, outputDirectory] = args;
 if (!sourcePath || !pencilPath || !outputDirectory) {
-  console.error("Usage: bun scripts/compare-visual.mjs <source.png> <pencil.png> <output-directory>");
+  console.error("Usage: bun scripts/compare-visual.mjs <source.png> <pencil.png> <output-directory> [--max-rmse <0..1>] [--require-same-size]");
   process.exit(2);
+}
+
+let maxRmse = null;
+let requireSameSize = false;
+for (let index = 3; index < args.length; index += 1) {
+  const argument = args[index];
+  if (argument === "--require-same-size") {
+    requireSameSize = true;
+    continue;
+  }
+  if (argument === "--max-rmse") {
+    maxRmse = Number(args[index + 1]);
+    index += 1;
+    if (!Number.isFinite(maxRmse) || maxRmse < 0 || maxRmse > 1) {
+      throw new Error("--max-rmse must be a number between 0 and 1");
+    }
+    continue;
+  }
+  throw new Error(`Unknown argument: ${argument}`);
 }
 
 function run(command, args, allowDifference = false) {
@@ -42,14 +62,26 @@ await run("magick", [pencil, "-resize", `${sourceDimensions.width}x${sourceDimen
 const metricResult = await run("magick", ["compare", "-metric", "RMSE", source, normalizedPencil, diff], true);
 await run("magick", [source, normalizedPencil, "+append", sideBySide]);
 const metricMatch = metricResult.stderr.match(/([\d.]+)\s*\(([\d.]+)\)/);
+const normalizedRmse = metricMatch ? Number(metricMatch[2]) : null;
+const sameSize = pencilDimensions.width === sourceDimensions.width && pencilDimensions.height === sourceDimensions.height;
+const gates = {
+  requireSameSize,
+  maxRmse,
+  sameSize,
+  sizePassed:!requireSameSize || sameSize,
+  rmsePassed:maxRmse === null || (normalizedRmse !== null && normalizedRmse <= maxRmse),
+};
+gates.passed = gates.sizePassed && gates.rmsePassed;
 const report = {
   source:{path:source, ...sourceDimensions},
   pencil:{path:pencil, ...pencilDimensions},
-  normalized:pencilDimensions.width !== sourceDimensions.width || pencilDimensions.height !== sourceDimensions.height,
+  normalized:!sameSize,
   rmse:metricMatch ? Number(metricMatch[1]) : null,
-  normalizedRmse:metricMatch ? Number(metricMatch[2]) : null,
+  normalizedRmse,
+  gates,
   outputs:{diff,sideBySide,normalizedPencil},
 };
 await writeFile(`${output}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
 await writeFile(`${output}/report.html`, `<!doctype html><meta charset="utf-8"><title>Pencil Capture visual comparison</title><style>body{font:14px system-ui;margin:24px;background:#f5f5f2;color:#181817}main{max-width:1400px;margin:auto}section{margin:24px 0}img{max-width:100%;border:1px solid #ddd;background:white}code{background:#e9e9e5;padding:2px 5px;border-radius:4px}</style><main><h1>Pencil Capture visual comparison</h1><p>RMSE: <code>${report.rmse}</code> · normalized RMSE: <code>${report.normalizedRmse}</code> · resized: <code>${report.normalized}</code></p><section><h2>Source × Pencil</h2><img src="${basename(sideBySide)}"></section><section><h2>Pixel difference</h2><img src="${basename(diff)}"></section></main>`);
 console.log(JSON.stringify(report));
+if (!gates.passed) process.exitCode = 1;
