@@ -1,8 +1,8 @@
 import { captureSelectionInMainWorld } from "./main-world-capture.mjs";
 
-const BRIDGE_KEY = "__pencilCaptureMainWorldBridge";
-const REQUEST_EVENT = "pencil-capture:copy-request";
-const RESPONSE_EVENT = "pencil-capture:copy-response";
+const BRIDGE_KEY = "__penCaptureMainWorldBridge";
+const REQUEST_EVENT = "pen-capture:copy-request";
+const RESPONSE_EVENT = "pen-capture:copy-response";
 
 if (!globalThis[BRIDGE_KEY]) {
   const onRequest = (event) => {

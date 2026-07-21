@@ -1,4 +1,4 @@
-export const CAPTURE_FORMAT = "pencil-capture-ir";
+export const CAPTURE_FORMAT = "pen-capture-ir";
 export const CAPTURE_VERSION = 1;
 
 export const CAPTURED_STYLE_KEYS = [
@@ -26,11 +26,11 @@ const CAPTURED_ATTRIBUTES = new Set([
   "id", "offset", "stop-color", "stop-opacity", "gradientUnits", "gradientTransform",
 ]);
 
-const EXTENSION_ASSET_REQUEST = "pencil-capture:asset-request";
-const EXTENSION_ASSET_RESPONSE = "pencil-capture:asset-response";
+const EXTENSION_ASSET_REQUEST = "pen-capture:asset-request";
+const EXTENSION_ASSET_RESPONSE = "pen-capture:asset-response";
 
 function requestExtensionAsset(url, includeData = false) {
-  if (!document.documentElement.hasAttribute("data-pencil-capture-extension")) return Promise.resolve(null);
+  if (!document.documentElement.hasAttribute("data-pen-capture-extension")) return Promise.resolve(null);
   const id = crypto.randomUUID();
   return new Promise((resolve) => {
     const timeout = setTimeout(() => finish(null), 10_000);
@@ -310,6 +310,6 @@ export function captureElement(root, options = {}) {
       || root.getAttribute("data-slot")
       || root.tagName.toLowerCase(),
     source: { url: options.url || globalThis.location?.href || null, selector: options.selector || null },
-    capturedAt: new Date().toISOString(), rootPath: "0", nodes,
+    capturedAt: options.capturedAt || new Date().toISOString(), rootPath: "0", nodes,
   };
 }

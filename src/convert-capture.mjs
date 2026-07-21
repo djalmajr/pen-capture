@@ -236,7 +236,8 @@ function transformedText(node, value = node.text) {
 }
 
 function fontFamily(value) {
-  return value?.split(",")[0]?.trim().replace(/^['"]|['"]$/g, "") || "Noto Sans";
+  const family = value?.split(",")[0]?.trim().replace(/^['"]|['"]$/g, "") || "Noto Sans";
+  return family === "Geist Variable" ? "Inter" : family;
 }
 
 function isCssShown(node) {
@@ -292,7 +293,7 @@ function parseCssShadows(value) {
     const blur = Math.max(0,numbers[2] || 0);
     const spread = numbers[3] || 0;
     // CSS frameworks frequently reset controls with opaque zero-geometry
-    // shadows. Sending those to Pencil invokes its default shadow geometry
+    // shadows. Sending those to Pen invokes its default shadow geometry
     // and creates a visible border that does not exist in the browser.
     if (offset.x === 0 && offset.y === 0 && blur === 0 && spread === 0) return [];
     return [{ type:"shadow", shadowType:shadow.includes("inset") ? "inner" : "outer", offset, blur, spread, color }];
@@ -379,7 +380,7 @@ function makeText(node, parent, name = `${semanticLayerName(node)} · Text`, run
     fontStyle:node.styles.fontStyle || "normal", lineHeight:round(lineHeight / fontSize),
     textAlign:align, textAlignVertical:node.tag === "button" ? "middle" : "top",
     ...(String(node.styles.textDecorationLine || "").includes("underline") ? {underline:true} : {}),
-    ...(node.attributes.href ? {href:node.attributes.href,metadata:{type:"pencil-capture-link",href:node.attributes.href}} : {}),
+    ...(node.attributes.href ? {href:node.attributes.href,metadata:{type:"pen-capture-link",href:node.attributes.href}} : {}),
   };
 }
 
@@ -393,7 +394,7 @@ function makeTextUnderline(node, parent, name = `${semanticLayerName(node)} · U
     x:round(sourceRect.x-parent.rect.x),y:round(sourceRect.y-parent.rect.y+sourceRect.height-thickness),
     width:round(sourceRect.width),height:thickness,
     fill:safeColor(node.styles.textDecorationColor) || safeColor(node.styles.color) || "#000000",
-    ...(node.attributes.href ? {metadata:{type:"pencil-capture-link-underline",href:node.attributes.href}} : {}),
+    ...(node.attributes.href ? {metadata:{type:"pen-capture-link-underline",href:node.attributes.href}} : {}),
   };
 }
 
@@ -422,7 +423,7 @@ function imageMode(node) {
   return node.styles.objectFit === "contain" ? "fit" : node.styles.objectFit === "cover" ? "fill" : "stretch";
 }
 
-function pencilBlendMode(value) {
+function penBlendMode(value) {
   const modes = new Map([
     ["normal","normal"],["darken","darken"],["multiply","multiply"],["color-burn","colorBurn"],
     ["lighten","light"],["screen","screen"],["color-dodge","colorDodge"],["overlay","overlay"],
@@ -448,12 +449,12 @@ function filteredImageNode(node, parent, url) {
   const brightness = filterAmount(filter,"brightness");
   const darkened = Number.isFinite(brightness) && brightness >= 0 && brightness < 1;
   if (!(grayscale > 0) && !darkened) {
-    return {type:"rectangle",name:semanticLayerName(node),layoutPosition:"absolute",...rect,fill:{type:"image",url,mode:imageMode(node)},cornerRadius:cornerRadius(node.styles),...(filter && filter !== "none" ? {metadata:{type:"pencil-capture-image",filter}} : {})};
+    return {type:"rectangle",name:semanticLayerName(node),layoutPosition:"absolute",...rect,fill:{type:"image",url,mode:imageMode(node)},cornerRadius:cornerRadius(node.styles),...(filter && filter !== "none" ? {metadata:{type:"pen-capture-image",filter}} : {})};
   }
   const children = [{type:"rectangle",name:`${semanticLayerName(node)} · Source`,layoutPosition:"absolute",x:0,y:0,width:rect.width,height:rect.height,fill:{type:"image",url,mode:imageMode(node)}}];
   if (grayscale > 0) children.push({type:"rectangle",name:`${semanticLayerName(node)} · Grayscale`,layoutPosition:"absolute",x:0,y:0,width:rect.width,height:rect.height,fill:{type:"color",color:`#808080${Math.round(Math.min(1,grayscale)*255).toString(16).padStart(2,"0").toUpperCase()}`,blendMode:"saturation"}});
   if (darkened) children.push({type:"rectangle",name:`${semanticLayerName(node)} · Brightness`,layoutPosition:"absolute",x:0,y:0,width:rect.width,height:rect.height,fill:`#000000${Math.round((1-brightness)*255).toString(16).padStart(2,"0").toUpperCase()}`});
-  return {type:"frame",name:semanticLayerName(node),layout:"none",layoutPosition:"absolute",...rect,clip:true,cornerRadius:cornerRadius(node.styles),metadata:{type:"pencil-capture-image-filter",filter},children};
+  return {type:"frame",name:semanticLayerName(node),layout:"none",layoutPosition:"absolute",...rect,clip:true,cornerRadius:cornerRadius(node.styles),metadata:{type:"pen-capture-image-filter",filter},children};
 }
 
 function svgGraphic(node, parent, byPath, paintServers) {
@@ -475,7 +476,7 @@ function svgGraphic(node, parent, byPath, paintServers) {
     const dash = String(node.styles.strokeDasharray || "").match(/([\d.]+)px[, ]+([\d.]+)px/);
     const progress = dash && Number(dash[2]) > 0 ? clamp(Number(dash[1]) / Number(dash[2])) : 1;
     if (progress < 0.999) {
-      // Pencil's partial ellipse is a closed sector, so its stroke also draws
+      // Pen's partial ellipse is a closed sector, so its stroke also draws
       // radial edges. Progress rings need an open SVG arc instead.
       const width = Math.max(1, base.width);
       const height = Math.max(1, base.height);
@@ -515,8 +516,8 @@ function svgGraphic(node, parent, byPath, paintServers) {
   return null;
 }
 
-export function convertCaptureToPencil(capture, options = {}) {
-  if (capture?.format !== "pencil-capture-ir" || capture?.version !== 1) throw new Error("Unsupported capture format");
+export function convertCaptureToPen(capture, options = {}) {
+  if (capture?.format !== "pen-capture-ir" || capture?.version !== 1) throw new Error("Unsupported capture format");
   const byPath = new Map(capture.nodes.map((node) => [node.path, node]));
   const rootSource = byPath.get(capture.rootPath);
   if (!rootSource) throw new Error("Capture root is missing");
@@ -588,7 +589,7 @@ export function convertCaptureToPencil(capture, options = {}) {
         stats.frames += 1;
         return {
           type:"frame",name:"Canvas · Materialization required",layout:"none",layoutPosition:"absolute",
-          ...relativeRect(node,parent),metadata:{type:"pencil-capture-unmaterialized-canvas",reason:"embedded-assets-disabled"},children:[],
+          ...relativeRect(node,parent),metadata:{type:"pen-capture-unmaterialized-canvas",reason:"embedded-assets-disabled"},children:[],
         };
       }
       if (!url) { stats.skipped += 1; return null; }
@@ -599,7 +600,7 @@ export function convertCaptureToPencil(capture, options = {}) {
     const repeatingPattern = repeatingLinearPattern(node);
     const backgroundFill = repeatingPattern ? null : cssBackgroundToFill(node,{allowEmbeddedAssets:options.allowEmbeddedAssets !== false,baseUrl:capture.source?.url});
     const backgroundColor = safeColor(node.styles.backgroundColor);
-    const blendMode = pencilBlendMode(node.styles.mixBlendMode);
+    const blendMode = penBlendMode(node.styles.mixBlendMode);
     const shadows = parseCssShadows(node.styles.boxShadow);
     const border = Object.keys(borderProperties(node.styles)).length ? borderProperties(node.styles) : shadowRingBorder(shadows);
     const effects = shadows.filter((shadow) => !(border.stroke === shadow.color && border.strokeWidth === shadow.spread && shadow.offset.x === 0 && shadow.offset.y === 0 && shadow.blur === 0));
@@ -614,7 +615,8 @@ export function convertCaptureToPencil(capture, options = {}) {
       if (svg) frameRect = {x:round(node.rect.x-svg.rect.x),y:round(node.rect.y-svg.rect.y),width:round(node.rect.width),height:round(node.rect.height)};
     }
     const clipped = ["hidden", "clip"].includes(node.styles.overflow);
-    const framed = node.path === capture.rootPath || Boolean(repeatingPattern || backgroundFill || backgroundColor || border.stroke || effects.length || clipped);
+    const isHtmlElement = node.namespace !== "http://www.w3.org/2000/svg";
+    const framed = node.path === capture.rootPath || isHtmlElement || Boolean(repeatingPattern || backgroundFill || backgroundColor || border.stroke || effects.length || clipped);
     const frame = framed ? {
       type:"frame", name:semanticLayerName(node), layout:"none", layoutPosition:"absolute",
       ...frameRect, cornerRadius:cornerRadius(node.styles),
@@ -666,6 +668,6 @@ export function convertCaptureToPencil(capture, options = {}) {
   root.x = 0;
   root.y = 0;
   root.layoutPosition = undefined;
-  root.clip = false;
-  return { format:"pencil-node-tree", version:2, source:capture.source, stats, root };
+  if (!root.clip) root.clip = false;
+  return { format:"pen-node-tree", version:2, source:capture.source, stats, root };
 }

@@ -51,8 +51,8 @@ try {
       value:{runtime:{
         getURL:(path) => `https://extension.invalid/${path}`,
         sendMessage:async (message) => {
-          if (message.type === "pencil-capture:write-clipboard") {
-            globalThis.__pencilCaptureTestClipboard = message;
+          if (message.type === "pen-capture:write-clipboard") {
+            globalThis.__penCaptureTestClipboard = message;
             return {ok:true};
           }
           return {ok:true, finalUrl:message.url, dataUrl:null};
@@ -62,8 +62,8 @@ try {
   });
   await frame.addScriptTag({path:new URL("dist/extension/content.js", root).pathname});
 
-  const toolbar = await frame.locator("#__pencil_capture_host__").evaluateHandle((host) => host.shadowRoot.querySelector(".toolbar"));
-  const topToolbar = await page.locator("#__pencil_capture_host__").evaluateHandle((host) => host.shadowRoot.querySelector(".toolbar"));
+  const toolbar = await frame.locator("#__pen_capture_host__").evaluateHandle((host) => host.shadowRoot.querySelector(".toolbar"));
+  const topToolbar = await page.locator("#__pen_capture_host__").evaluateHandle((host) => host.shadowRoot.querySelector(".toolbar"));
   if (!await toolbar.evaluate((element) => element.classList.contains("frame-inactive"))) {
     throw new Error("Embedded picker should stay hidden until the pointer enters its document");
   }
@@ -78,12 +78,12 @@ try {
   await target.click({position:{x:40, y:40}});
 
   await frame.waitForFunction(() => {
-    const host = document.getElementById("__pencil_capture_host__");
+    const host = document.getElementById("__pen_capture_host__");
     return host && !host.shadowRoot.querySelector(".success-view").hidden;
   }, null, {timeout:30_000});
 
   const clipboard = await frame.evaluate(() => {
-    const html = globalThis.__pencilCaptureTestClipboard?.html || "";
+    const html = globalThis.__penCaptureTestClipboard?.html || "";
     const encoded = html.match(/data-pen-node-clipboard="([^"]+)"/)?.[1];
     const payload = encoded
       ? JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0))))
@@ -91,7 +91,7 @@ try {
     return {marker:Boolean(encoded), name:payload?.remoteData?.nodes?.[0]?.name};
   });
   if (!clipboard.marker || !clipboard.name?.includes("Payout Threshold")) {
-    throw new Error(`Iframe selection did not reach Pencil's clipboard: ${JSON.stringify(clipboard)}`);
+    throw new Error(`Iframe selection did not reach Pen's clipboard: ${JSON.stringify(clipboard)}`);
   }
 
   console.log(JSON.stringify({topOrigin, childOrigin, crossOrigin:true, clipboard}));

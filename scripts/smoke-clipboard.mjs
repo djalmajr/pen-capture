@@ -1,10 +1,10 @@
 import { chromium } from "playwright";
-import { createPencilClipboardHtml } from "../src/pencil-clipboard.mjs";
-import { materializePencilAssets } from "../src/materialize-pencil-assets.mjs";
+import { createPenClipboardHtml } from "../src/pen-clipboard.mjs";
+import { materializePenAssets } from "../src/materialize-pen-assets.mjs";
 
 const url = process.argv[2] || "https://ui.shadcn.com/preview/base/preview-02?preset=b1FS9AzhY&theme=amber&chartColor=amber&font=noto-sans&baseColor=olive&radius=small&template=vite&pointer=true";
 const selector = process.argv[3] || "div.relative.bg-background > div.overflow-x-auto.overflow-y-hidden > div.flex.w-full > div.grid.grid-cols-7";
-const browser = await chromium.launch({ headless:process.env.PENCIL_CAPTURE_HEADED !== "1" });
+const browser = await chromium.launch({ headless:process.env.PEN_CAPTURE_HEADED !== "1" });
 try {
   const context = await browser.newContext();
   await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin:new URL(url).origin });
@@ -18,7 +18,7 @@ try {
   await page.locator(selector).waitFor({ state:"visible", timeout:30_000 });
   await page.emulateMedia({reducedMotion:"reduce"});
   await page.evaluate(() => document.fonts?.ready);
-  if (process.env.PENCIL_CAPTURE_FIT_TARGET !== "0") {
+  if (process.env.PEN_CAPTURE_FIT_TARGET !== "0") {
     const box = await page.locator(selector).boundingBox();
     if (box) {
       await page.setViewportSize({
@@ -27,7 +27,7 @@ try {
       });
     }
   }
-  await page.waitForTimeout(Number(process.env.PENCIL_CAPTURE_SETTLE_MS || 1500));
+  await page.waitForTimeout(Number(process.env.PEN_CAPTURE_SETTLE_MS || 1500));
   await page.addScriptTag({ path:new URL("../dist/extension/bridge.js", import.meta.url).pathname });
   await page.bringToFront();
   const capture = await page.evaluate(async (targetSelector) => {
@@ -38,11 +38,11 @@ try {
         const response = JSON.parse(event.detail);
         if (response.id !== id) return;
         clearTimeout(timeout);
-        globalThis.removeEventListener("pencil-capture:copy-response", onResponse);
+        globalThis.removeEventListener("pen-capture:copy-response", onResponse);
         response.ok ? resolve(response) : reject(new Error(response.error));
       };
-      globalThis.addEventListener("pencil-capture:copy-response", onResponse);
-      globalThis.dispatchEvent(new CustomEvent("pencil-capture:copy-request", {
+      globalThis.addEventListener("pen-capture:copy-response", onResponse);
+      globalThis.dispatchEvent(new CustomEvent("pen-capture:copy-request", {
         detail:JSON.stringify({ id, selector:targetSelector }),
       }));
     });
@@ -79,18 +79,18 @@ try {
   }
   result.containsDataUrl = Boolean(result.html?.includes("data:image/"));
   let materialized = null;
-  if (process.env.PENCIL_CAPTURE_MATERIALIZE_DIR && result.html) {
+  if (process.env.PEN_CAPTURE_MATERIALIZE_DIR && result.html) {
     const encoded = result.html.match(/data-pen-node-clipboard="([^"]+)"/)?.[1];
     const payload = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0))));
-    materialized = await materializePencilAssets(payload.remoteData.nodes, {
-      outputDir:process.env.PENCIL_CAPTURE_MATERIALIZE_DIR,
-      relativePrefix:process.env.PENCIL_CAPTURE_ASSET_PREFIX || "./assets/captured",
+    materialized = await materializePenAssets(payload.remoteData.nodes, {
+      outputDir:process.env.PEN_CAPTURE_MATERIALIZE_DIR,
+      relativePrefix:process.env.PEN_CAPTURE_ASSET_PREFIX || "./assets/captured",
     });
-    const html = createPencilClipboardHtml(payload.remoteData.nodes, payload.source);
+    const html = createPenClipboardHtml(payload.remoteData.nodes, payload.source);
     await page.evaluate(async (nextHtml) => {
       await navigator.clipboard.write([new ClipboardItem({
         "text/html":new Blob([nextHtml], {type:"text/html"}),
-        "text/plain":new Blob(["Captured for Pencil"], {type:"text/plain"}),
+        "text/plain":new Blob(["Captured for Pen"], {type:"text/plain"}),
       })]);
     }, html);
     const rewritten = await page.evaluate(async () => {
@@ -107,7 +107,7 @@ try {
   delete captureSummary.html;
   delete captureSummary.plain;
   console.log(JSON.stringify({ url, selector, capture:captureSummary, materialized, ...result }));
-  const holdMs = Number(process.env.PENCIL_CAPTURE_HOLD_MS || 0);
+  const holdMs = Number(process.env.PEN_CAPTURE_HOLD_MS || 0);
   if (holdMs > 0) await new Promise((resolve) => setTimeout(resolve, holdMs));
 } finally {
   await browser.close();

@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "Pencil Capture",
-  "version": "0.1.4",
-  "description": "Copy rendered web elements as editable layers for Pencil",
+  "name": "Pen Capture",
+  "version": "0.1.5",
+  "description": "Copy rendered web elements as editable layers for Pen",
   "permissions": ["activeTab", "clipboardWrite", "offscreen", "scripting"],
   "host_permissions": ["<all_urls>"],
   "action": {
-    "default_title": "Capture an element for Pencil",
+    "default_title": "Capture an element for Pen",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",
@@ -22,7 +22,7 @@
   },
   "background": { "service_worker": "background.js", "type": "module" },
   "web_accessible_resources": [{
-    "resources": ["icons/pencil.svg"],
+    "resources": ["icons/pen-mark.png"],
     "matches": ["<all_urls>"]
   }]
 }

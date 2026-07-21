@@ -1,5 +1,5 @@
 {
-  "format": "pencil-capture-catalog",
+  "format": "pen-capture-catalog",
   "version": 1,
   "selector": "div.relative.bg-background > div.overflow-x-auto.overflow-y-hidden > div.flex.w-full > div.grid.grid-cols-7 > div > *",
   "catalogs": [

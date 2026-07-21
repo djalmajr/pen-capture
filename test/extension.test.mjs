@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { isPageCaptureShortcut, pageCaptureModifier } from "../src/extension/shortcuts.mjs";
-import { createPencilClipboardHtml } from "../src/pencil-clipboard.mjs";
+import { createPenClipboardHtml } from "../src/pen-clipboard.mjs";
 import { fetchExtensionAsset } from "../src/extension/asset-fetch.mjs";
 import { effectiveFilter } from "../src/capture-element.mjs";
 import { captureProgressForElapsed } from "../src/extension/capture-progress.mjs";
@@ -9,9 +9,9 @@ import { waitForVisualStability } from "../src/extension/visual-stability.mjs";
 import { writeClipboardPayload } from "../src/extension/write-clipboard.mjs";
 
 describe("extension clipboard contract", () => {
-  test("encodes Pencil's native node clipboard envelope", () => {
+  test("encodes Pen's native node clipboard envelope", () => {
     const node = { type:"frame", name:"Captured card", width:320, height:200, children:[] };
-    const html = createPencilClipboardHtml([node], "test-source");
+    const html = createPenClipboardHtml([node], "test-source");
     const encoded = html.match(/data-pen-node-clipboard="([^"]+)"/)?.[1];
     expect(encoded).toBeTruthy();
     const payload = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0))));
@@ -22,10 +22,13 @@ describe("extension clipboard contract", () => {
     });
   });
 
-  test("declares Pencil icons for the extension and action", async () => {
+  test("declares Pen icons for the extension and action", async () => {
     const manifest = JSON.parse(await readFile(new URL("../extension/manifest.json", import.meta.url), "utf8"));
+    expect(manifest.name).toBe("Pen Capture");
+    expect(manifest.description).toContain("for Pen");
     expect(manifest.action.default_icon["16"]).toBe("icons/icon-16.png");
     expect(manifest.icons["128"]).toBe("icons/icon-128.png");
+    expect(manifest.web_accessible_resources[0].resources).toEqual(["icons/pen-mark.png"]);
     expect(manifest.host_permissions).toEqual(["<all_urls>"]);
   });
 
@@ -44,7 +47,7 @@ describe("extension clipboard contract", () => {
   test("marks the live target across isolated and main extension worlds", async () => {
     const content = await readFile(new URL("../src/extension/content.mjs", import.meta.url), "utf8");
     const bridge = await readFile(new URL("../src/extension/main-world-bridge.mjs", import.meta.url), "utf8");
-    expect(content).toContain('const TARGET_ATTRIBUTE = "data-pencil-capture-target"');
+    expect(content).toContain('const TARGET_ATTRIBUTE = "data-pen-capture-target"');
     expect(content).toContain("sourceSelector");
     expect(content).toContain("target.isConnected");
     expect(bridge).toContain("request.sourceSelector");
@@ -115,7 +118,7 @@ describe("extension clipboard contract", () => {
     expect(captureProgressForElapsed(60_000)).toBe(95);
   });
 
-  test("resolves redirected image URLs before Pencil receives them", async () => {
+  test("resolves redirected image URLs before Pen receives them", async () => {
     const content = await readFile(new URL("../src/extension/content.mjs", import.meta.url), "utf8");
     const calls = [];
     const result = await fetchExtensionAsset("https://github.com/example.png",{fetchImpl:async (url,options) => {

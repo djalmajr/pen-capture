@@ -1,9 +1,9 @@
 {
-  "name": "pencil-capture",
-  "version": "0.1.4",
+  "name": "pen-capture",
+  "version": "0.1.5",
   "private": true,
   "type": "module",
-  "bin": { "pencil-capture": "./bin/pencil-capture.mjs" },
+  "bin": { "pen-capture": "./bin/pen-capture.mjs" },
   "scripts": {
     "build": "bun scripts/build-extension.mjs",
     "capture:source": "bun scripts/capture-source-screenshot.mjs",
@@ -16,5 +16,8 @@
     "smoke:preview-02": "bun scripts/smoke-preview02-fidelity.mjs",
     "test": "bun test",
     "verify": "bun test && bun scripts/build-extension.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.61.1"
   }
 }

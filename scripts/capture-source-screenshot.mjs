@@ -9,9 +9,9 @@ if (!url || !selector || !outputPath) {
 }
 
 const output = resolve(outputPath);
-const settleMs = Number.parseInt(process.env.PENCIL_CAPTURE_SETTLE_MS ?? "500", 10);
+const settleMs = Number.parseInt(process.env.PEN_CAPTURE_SETTLE_MS ?? "500", 10);
 if (!Number.isFinite(settleMs) || settleMs < 0) {
-  throw new Error("PENCIL_CAPTURE_SETTLE_MS must be a non-negative integer");
+  throw new Error("PEN_CAPTURE_SETTLE_MS must be a non-negative integer");
 }
 await mkdir(dirname(output), {recursive:true});
 const browser = await chromium.launch({headless:true});

@@ -1,4 +1,4 @@
-import { captureElementForPencil } from "../pencil-clipboard.mjs";
+import { captureElementForPen } from "../pen-clipboard.mjs";
 import { elementVisualSignature, waitForVisualStability } from "./visual-stability.mjs";
 
 export async function captureSelectionInMainWorld(targetSelector, sourceSelector = targetSelector) {
@@ -6,15 +6,15 @@ export async function captureSelectionInMainWorld(targetSelector, sourceSelector
   if (!(target instanceof Element)) throw new Error("The selected element is no longer available");
   await waitForVisualStability(() => elementVisualSignature(target));
 
-  const { capture, html, converted } = await captureElementForPencil(target, {
+  const { capture, html, converted } = await captureElementForPen(target, {
     selector: sourceSelector,
     url: globalThis.location.href,
-    // Pencil treats data: image URLs as filesystem paths and exposes the
+    // Pen treats data: image URLs as filesystem paths and exposes the
     // entire base64 value in an asset error. Direct extension paste must use
     // fetchable source URLs; the CLI/MCP workflow materializes embedded assets.
     allowEmbeddedAssets:false,
   });
-  const plain = `Captured for Pencil: ${converted.root.name}`;
+  const plain = `Captured for Pen: ${converted.root.name}`;
   const countNodes = (node) => 1 + (node.children || []).reduce((total, child) => total + countNodes(child), 0);
   const capturedTags = Object.fromEntries(Object.entries(capture.nodes.reduce((counts, node) => {
     counts[node.tag] = (counts[node.tag] || 0) + 1;

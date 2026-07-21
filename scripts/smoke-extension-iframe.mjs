@@ -23,7 +23,7 @@ const topServer = Bun.serve({
   },
 });
 const topOrigin = `http://127.0.0.1:${topServer.port}`;
-const userDataDir = await mkdtemp(join(tmpdir(), "pencil-capture-chrome-"));
+const userDataDir = await mkdtemp(join(tmpdir(), "pen-capture-chrome-"));
 let context;
 
 try {
@@ -48,16 +48,16 @@ try {
   });
 
   const target = frame.locator("#payout");
-  await frame.locator("#__pencil_capture_host__").waitFor({state:"attached"});
+  await frame.locator("#__pen_capture_host__").waitFor({state:"attached"});
   await target.hover({position:{x:40, y:40}});
   await target.click({position:{x:40, y:40}});
   try {
     await frame.waitForFunction(() => {
-      const host = document.getElementById("__pencil_capture_host__");
+      const host = document.getElementById("__pen_capture_host__");
       return host && !host.shadowRoot.querySelector(".success-view").hidden;
     }, null, {timeout:30_000});
   } catch {
-    const state = await frame.locator("#__pencil_capture_host__").evaluate((host) => ({
+    const state = await frame.locator("#__pen_capture_host__").evaluate((host) => ({
       capturing:!host.shadowRoot.querySelector(".capturing-view").hidden,
       message:host.shadowRoot.querySelector(".capturing-message").textContent,
       progress:host.shadowRoot.querySelector(".capture-progress").getAttribute("aria-valuenow"),

@@ -63,7 +63,7 @@ async function applyCssFilter(bytes, filter) {
   return {mime:"image/png",bytes:output};
 }
 
-export async function materializePencilAssets(nodes, options) {
+export async function materializePenAssets(nodes, options) {
   const outputDir = options.outputDir;
   const relativePrefix = options.relativePrefix || "./assets/captured";
   const fetchFn = options.fetchFn || globalThis.fetch;
@@ -74,7 +74,7 @@ export async function materializePencilAssets(nodes, options) {
   let failures = 0;
   for (const {fill,owner} of fills) {
     const source = fill.url;
-    const filter = owner.metadata?.type === "pencil-capture-image" ? owner.metadata.filter : null;
+    const filter = owner.metadata?.type === "pen-capture-image" ? owner.metadata.filter : null;
     const cacheKey = `${source}\n${filter || "none"}`;
     try {
       if (!cache.has(cacheKey)) {

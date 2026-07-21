@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pen Capture"
+  short_description: "Capture web UI as editable Pen layers"
+  default_prompt: "Use $pen-capture to capture a web element and import it into the active Pen document."

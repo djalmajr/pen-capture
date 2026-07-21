@@ -2,7 +2,7 @@ dist/
 node_modules/
 artifacts/
 *.capture.json
-*.pencil-tree.json
+*.pen-tree.json
 .DS_Store
 
 # Scratch screenshots and assets generated during capture iterations.

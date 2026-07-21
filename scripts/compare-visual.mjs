@@ -3,9 +3,9 @@ import { basename, resolve } from "node:path";
 import { spawn } from "node:child_process";
 
 const args = process.argv.slice(2);
-const [sourcePath, pencilPath, outputDirectory] = args;
-if (!sourcePath || !pencilPath || !outputDirectory) {
-  console.error("Usage: bun scripts/compare-visual.mjs <source.png> <pencil.png> <output-directory> [--max-rmse <0..1>] [--require-same-size]");
+const [sourcePath, penPath, outputDirectory] = args;
+if (!sourcePath || !penPath || !outputDirectory) {
+  console.error("Usage: bun scripts/compare-visual.mjs <source.png> <pen.png> <output-directory> [--max-rmse <0..1>] [--require-same-size]");
   process.exit(2);
 }
 
@@ -50,20 +50,20 @@ async function dimensions(path) {
 }
 
 const source = resolve(sourcePath);
-const pencil = resolve(pencilPath);
+const pen = resolve(penPath);
 const output = resolve(outputDirectory);
 await mkdir(output, {recursive:true});
 const sourceDimensions = await dimensions(source);
-const pencilDimensions = await dimensions(pencil);
-const normalizedPencil = `${output}/pencil-normalized.png`;
+const penDimensions = await dimensions(pen);
+const normalizedPen = `${output}/pen-normalized.png`;
 const diff = `${output}/diff.png`;
 const sideBySide = `${output}/side-by-side.png`;
-await run("magick", [pencil, "-resize", `${sourceDimensions.width}x${sourceDimensions.height}!`, normalizedPencil]);
-const metricResult = await run("magick", ["compare", "-metric", "RMSE", source, normalizedPencil, diff], true);
-await run("magick", [source, normalizedPencil, "+append", sideBySide]);
+await run("magick", [pen, "-resize", `${sourceDimensions.width}x${sourceDimensions.height}!`, normalizedPen]);
+const metricResult = await run("magick", ["compare", "-metric", "RMSE", source, normalizedPen, diff], true);
+await run("magick", [source, normalizedPen, "+append", sideBySide]);
 const metricMatch = metricResult.stderr.match(/([\d.]+)\s*\(([\d.]+)\)/);
 const normalizedRmse = metricMatch ? Number(metricMatch[2]) : null;
-const sameSize = pencilDimensions.width === sourceDimensions.width && pencilDimensions.height === sourceDimensions.height;
+const sameSize = penDimensions.width === sourceDimensions.width && penDimensions.height === sourceDimensions.height;
 const gates = {
   requireSameSize,
   maxRmse,
@@ -74,14 +74,14 @@ const gates = {
 gates.passed = gates.sizePassed && gates.rmsePassed;
 const report = {
   source:{path:source, ...sourceDimensions},
-  pencil:{path:pencil, ...pencilDimensions},
+  pen:{path:pen, ...penDimensions},
   normalized:!sameSize,
   rmse:metricMatch ? Number(metricMatch[1]) : null,
   normalizedRmse,
   gates,
-  outputs:{diff,sideBySide,normalizedPencil},
+  outputs:{diff,sideBySide,normalizedPen},
 };
 await writeFile(`${output}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
-await writeFile(`${output}/report.html`, `<!doctype html><meta charset="utf-8"><title>Pencil Capture visual comparison</title><style>body{font:14px system-ui;margin:24px;background:#f5f5f2;color:#181817}main{max-width:1400px;margin:auto}section{margin:24px 0}img{max-width:100%;border:1px solid #ddd;background:white}code{background:#e9e9e5;padding:2px 5px;border-radius:4px}</style><main><h1>Pencil Capture visual comparison</h1><p>RMSE: <code>${report.rmse}</code> · normalized RMSE: <code>${report.normalizedRmse}</code> · resized: <code>${report.normalized}</code></p><section><h2>Source × Pencil</h2><img src="${basename(sideBySide)}"></section><section><h2>Pixel difference</h2><img src="${basename(diff)}"></section></main>`);
+await writeFile(`${output}/report.html`, `<!doctype html><meta charset="utf-8"><title>Pen Capture visual comparison</title><style>body{font:14px system-ui;margin:24px;background:#f5f5f2;color:#181817}main{max-width:1400px;margin:auto}section{margin:24px 0}img{max-width:100%;border:1px solid #ddd;background:white}code{background:#e9e9e5;padding:2px 5px;border-radius:4px}</style><main><h1>Pen Capture visual comparison</h1><p>RMSE: <code>${report.rmse}</code> · normalized RMSE: <code>${report.normalizedRmse}</code> · resized: <code>${report.normalized}</code></p><section><h2>Source × Pen</h2><img src="${basename(sideBySide)}"></section><section><h2>Pixel difference</h2><img src="${basename(diff)}"></section></main>`);
 console.log(JSON.stringify(report));
 if (!gates.passed) process.exitCode = 1;

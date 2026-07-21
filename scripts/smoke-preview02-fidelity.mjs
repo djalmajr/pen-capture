@@ -29,16 +29,16 @@ try {
           const response = JSON.parse(event.detail);
           if (response.id !== id) return;
           clearTimeout(timeout);
-          globalThis.removeEventListener("pencil-capture:copy-response",listener);
+          globalThis.removeEventListener("pen-capture:copy-response",listener);
           response.ok ? resolve(response) : reject(new Error(response.error));
         };
-        globalThis.addEventListener("pencil-capture:copy-response",listener);
-        globalThis.dispatchEvent(new CustomEvent("pencil-capture:copy-request",{detail:JSON.stringify({id,selector:targetSelector})}));
+        globalThis.addEventListener("pen-capture:copy-response",listener);
+        globalThis.dispatchEvent(new CustomEvent("pen-capture:copy-request",{detail:JSON.stringify({id,selector:targetSelector})}));
       });
     },selector);
     return page.evaluate((html) => {
       const encoded = html.match(/data-pen-node-clipboard="([^"]+)"/)?.[1];
-      if (!encoded) throw new Error("Pencil clipboard marker is missing");
+      if (!encoded) throw new Error("Pen clipboard marker is missing");
       return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(encoded),(character) => character.charCodeAt(0)))).remoteData.nodes[0];
     },response.html);
   };

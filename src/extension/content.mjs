@@ -2,20 +2,20 @@ import { createSelectionState, selectChild, selectParent, setHoveredTarget } fro
 import { captureProgressForElapsed } from "./capture-progress.mjs";
 import { isPageCaptureShortcut, pageCaptureModifier } from "./shortcuts.mjs";
 
-const CONTROLLER_KEY = "__pencilCaptureController";
-const REQUEST_EVENT = "pencil-capture:copy-request";
-const RESPONSE_EVENT = "pencil-capture:copy-response";
-const ASSET_REQUEST_EVENT = "pencil-capture:asset-request";
-const ASSET_RESPONSE_EVENT = "pencil-capture:asset-response";
-const TARGET_ATTRIBUTE = "data-pencil-capture-target";
-const FRAME_ACTIVITY_MESSAGE = "pencil-capture:frame-activity";
-const FRAME_CANCEL_MESSAGE = "pencil-capture:frame-cancel";
+const CONTROLLER_KEY = "__penCaptureController";
+const REQUEST_EVENT = "pen-capture:copy-request";
+const RESPONSE_EVENT = "pen-capture:copy-response";
+const ASSET_REQUEST_EVENT = "pen-capture:asset-request";
+const ASSET_RESPONSE_EVENT = "pen-capture:asset-response";
+const TARGET_ATTRIBUTE = "data-pen-capture-target";
+const FRAME_ACTIVITY_MESSAGE = "pen-capture:frame-activity";
+const FRAME_CANCEL_MESSAGE = "pen-capture:frame-cancel";
 
-document.documentElement.setAttribute("data-pencil-capture-extension", "ready");
+document.documentElement.setAttribute("data-pen-capture-extension", "ready");
 globalThis.addEventListener(ASSET_REQUEST_EVENT, async (event) => {
   let request;
   try { request = JSON.parse(event.detail); } catch { return; }
-  const response = await chrome.runtime.sendMessage({type:"pencil-capture:fetch-asset",url:request.url,includeData:request.includeData === true});
+  const response = await chrome.runtime.sendMessage({type:"pen-capture:fetch-asset",url:request.url,includeData:request.includeData === true});
   globalThis.dispatchEvent(new CustomEvent(ASSET_RESPONSE_EVENT, {
     detail:JSON.stringify({id:request.id,dataUrl:response?.ok ? response.dataUrl : null,finalUrl:response?.ok ? response.finalUrl : null}),
   }));
@@ -80,7 +80,7 @@ function install() {
   const isEmbeddedDocument = globalThis.top !== globalThis;
   const pageModifier = pageCaptureModifier(navigator.platform);
   const host = document.createElement("div");
-  host.id = "__pencil_capture_host__";
+  host.id = "__pen_capture_host__";
   const shadow = host.attachShadow({ mode: "open" });
   shadow.innerHTML = `
     <style>
@@ -92,8 +92,8 @@ function install() {
       .toolbar.is-capturing .capture-progress { opacity:1; }
       .view { position:relative; z-index:1; display:flex; align-items:center; gap:12px; }
       .view[hidden] { display:none !important; }
-      .state-icon { display:grid; place-items:center; width:24px; height:24px; flex:0 0 24px; }
-      .mark { display:block; width:24px; height:24px; transition:filter 120ms ease,opacity 120ms ease; }
+      .state-icon { display:grid; place-items:center; width:20px; height:20px; flex:0 0 20px; }
+      .mark { display:block; width:20px; height:20px; transition:filter 120ms ease,opacity 120ms ease; }
       .capturing-view .mark { filter:grayscale(1); opacity:.55; }
       .capturing-view { min-width:220px; }
       .capturing-message { flex:1; }
@@ -109,7 +109,7 @@ function install() {
     <div class="toolbar">
       <span class="capture-progress" role="progressbar" aria-label="Capture progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></span>
       <div class="view selection-view">
-        <span class="state-icon"><img class="mark" src="${chrome.runtime.getURL("icons/pencil.svg")}" alt="" /></span>
+        <span class="state-icon"><img class="mark" src="${chrome.runtime.getURL("icons/pen-mark.png")}" alt="" /></span>
         <span class="instructions">
           <span class="hint">Click or <span class="keys"><kbd>↵</kbd></span> to capture</span>
           <span class="sep"></span>
@@ -121,13 +121,13 @@ function install() {
         </span>
       </div>
       <div class="view capturing-view" hidden>
-        <span class="state-icon"><img class="mark" src="${chrome.runtime.getURL("icons/pencil.svg")}" alt="" /></span>
+        <span class="state-icon"><img class="mark" src="${chrome.runtime.getURL("icons/pen-mark.png")}" alt="" /></span>
         <span class="message capturing-message">Capturing selection…</span>
         <span class="capturing-percentage">0%</span>
       </div>
       <div class="view success-view" hidden>
         <span class="state-icon"><span class="check">✓</span></span>
-        <span class="message">Copied to clipboard. Ready to paste into Pencil.</span>
+        <span class="message">Copied to clipboard. Ready to paste into Pen.</span>
       </div>
     </div>
     <div class="outline"></div>`;
@@ -266,7 +266,7 @@ function install() {
     let completion = response;
     if (response?.ok) {
       completion = await chrome.runtime.sendMessage({
-        type:"pencil-capture:write-clipboard",
+        type:"pen-capture:write-clipboard",
         html:response.html,
         plain:response.plain,
       });

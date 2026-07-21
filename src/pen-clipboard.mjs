@@ -1,8 +1,8 @@
 import { captureElement, hydrateFilteredImageAssets } from "./capture-element.mjs";
-import { convertCaptureToPencil } from "./convert-capture.mjs";
+import { convertCaptureToPen } from "./convert-capture.mjs";
 import { inlineCaptureAssets } from "./inline-assets.mjs";
 
-export const PENCIL_CLIPBOARD_ATTRIBUTE = "data-pen-node-clipboard";
+export const PEN_CLIPBOARD_ATTRIBUTE = "data-pen-node-clipboard";
 
 function encodeBase64Utf8(value) {
   const bytes = new TextEncoder().encode(value);
@@ -14,9 +14,9 @@ function encodeBase64Utf8(value) {
   return btoa(binary);
 }
 
-export function createPencilClipboardData(nodes, source = "pencil-capture/browser-extension") {
+export function createPenClipboardData(nodes, source = "pen-capture/browser-extension") {
   if (!Array.isArray(nodes) || nodes.length === 0) {
-    throw new TypeError("Pencil clipboard data requires at least one node");
+    throw new TypeError("Pen clipboard data requires at least one node");
   }
   return {
     source,
@@ -29,21 +29,21 @@ export function createPencilClipboardData(nodes, source = "pencil-capture/browse
   };
 }
 
-export function createPencilClipboardHtml(nodes, source) {
-  const data = createPencilClipboardData(nodes, source);
-  return `<span ${PENCIL_CLIPBOARD_ATTRIBUTE}="${encodeBase64Utf8(JSON.stringify(data))}"></span>`;
+export function createPenClipboardHtml(nodes, source) {
+  const data = createPenClipboardData(nodes, source);
+  return `<span ${PEN_CLIPBOARD_ATTRIBUTE}="${encodeBase64Utf8(JSON.stringify(data))}"></span>`;
 }
 
-export async function captureElementForPencil(element, options = {}) {
+export async function captureElementForPen(element, options = {}) {
   const capture = captureElement(element, options);
   await hydrateFilteredImageAssets(capture, element);
   if (options.inlineAssets === true) await inlineCaptureAssets(capture, options);
-  const converted = convertCaptureToPencil(capture, {
+  const converted = convertCaptureToPen(capture, {
     allowEmbeddedAssets:options.allowEmbeddedAssets !== false,
   });
   return {
     capture,
     converted,
-    html: createPencilClipboardHtml([converted.root]),
+    html: createPenClipboardHtml([converted.root]),
   };
 }

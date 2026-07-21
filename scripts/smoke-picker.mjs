@@ -17,7 +17,7 @@ try {
       value:{ runtime:{
         getURL:(path) => `https://extension.invalid/${path}`,
         sendMessage:async (message) => {
-          if (message.type === "pencil-capture:write-clipboard") {
+          if (message.type === "pen-capture:write-clipboard") {
             await navigator.clipboard.write([new ClipboardItem({
               "text/html":new Blob([message.html], {type:"text/html"}),
               "text/plain":new Blob([message.plain], {type:"text/plain"}),
@@ -32,9 +32,9 @@ try {
   await page.addScriptTag({ path:new URL("dist/extension/content.js", root).pathname });
 
   await page.keyboard.press("Escape");
-  await page.waitForFunction(() => !document.getElementById("__pencil_capture_host__"));
+  await page.waitForFunction(() => !document.getElementById("__pen_capture_host__"));
   await page.addScriptTag({ path:new URL("dist/extension/content.js", root).pathname });
-  if (await page.locator("#__pencil_capture_host__").count() !== 1) {
+  if (await page.locator("#__pen_capture_host__").count() !== 1) {
     throw new Error("Picker did not reopen after Escape teardown");
   }
 
@@ -56,7 +56,7 @@ try {
   if (!selectedBox) throw new Error("Picker did not select a live element under the pointer");
   await page.mouse.click(pointer.x, pointer.y);
 
-  const state = async () => page.locator("#__pencil_capture_host__").evaluate((host) => {
+  const state = async () => page.locator("#__pen_capture_host__").evaluate((host) => {
     const toolbar = host.shadowRoot.querySelector(".toolbar");
     const progressElement = host.shadowRoot.querySelector(".capture-progress");
     const toolbarWidth = toolbar.getBoundingClientRect().width;
@@ -84,7 +84,7 @@ try {
     throw new Error(`Picker progress background did not visibly advance: ${JSON.stringify({ capturing, progressing })}`);
   }
   await page.waitForFunction(() => {
-    const host = document.getElementById("__pencil_capture_host__");
+    const host = document.getElementById("__pen_capture_host__");
     return host && !host.shadowRoot.querySelector(".success-view").hidden;
   }, null, { timeout:60_000 });
   const success = await state();

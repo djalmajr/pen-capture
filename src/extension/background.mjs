@@ -14,7 +14,7 @@ async function ensureOffscreenDocument() {
     creatingOffscreenDocument = chrome.offscreen.createDocument({
       url:OFFSCREEN_URL,
       reasons:["CLIPBOARD"],
-      justification:"Write the captured Pencil design from iframe and page documents",
+      justification:"Write the captured Pen design from iframe and page documents",
     }).finally(() => { creatingOffscreenDocument = undefined; });
   }
   await creatingOffscreenDocument;
@@ -28,12 +28,12 @@ chrome.action.onClicked.addListener(async (tab) => {
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type === "pencil-capture:write-clipboard") {
+  if (message?.type === "pen-capture:write-clipboard") {
     (async () => {
       try {
         await ensureOffscreenDocument();
         sendResponse(await chrome.runtime.sendMessage({
-          type:"pencil-capture:offscreen-write",
+          type:"pen-capture:offscreen-write",
           html:message.html,
           plain:message.plain,
         }));
@@ -43,7 +43,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     })();
     return true;
   }
-  if (message?.type !== "pencil-capture:fetch-asset" || typeof message.url !== "string") return false;
+  if (message?.type !== "pen-capture:fetch-asset" || typeof message.url !== "string") return false;
   (async () => {
     try {
       sendResponse({ok:true,...await fetchExtensionAsset(message.url,{includeData:message.includeData === true})});
