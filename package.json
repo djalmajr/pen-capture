@@ -1,9 +1,25 @@
 {
-  "name": "pen-capture",
-  "version": "0.1.5",
-  "private": true,
+  "name": "@djalmajr/pen-capture",
+  "version": "0.1.6",
+  "description": "Capture rendered web UI as editable Pen.dev layers.",
   "type": "module",
   "bin": { "pen-capture": "./bin/pen-capture.mjs" },
+  "files": [
+    "bin/pen-capture.mjs",
+    "src/build-batch.mjs",
+    "src/capture-element.mjs",
+    "src/capture-url.mjs",
+    "src/convert-capture.mjs",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/djalmajr/pen-capture.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  },
   "scripts": {
     "build": "bun scripts/build-extension.mjs",
     "capture:source": "bun scripts/capture-source-screenshot.mjs",
@@ -17,7 +33,7 @@
     "test": "bun test",
     "verify": "bun test && bun scripts/build-extension.mjs"
   },
-  "devDependencies": {
+  "dependencies": {
     "playwright": "1.61.1"
   }
 }

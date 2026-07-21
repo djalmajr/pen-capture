@@ -1,4 +1,4 @@
-name: Release extension
+name: Release extension and CLI
 
 on:
   push:
@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   release:
@@ -40,6 +41,18 @@ jobs:
 
       - name: Test and build
         run: bun run verify
+
+      - name: Publish CLI to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/pen-capture.npmrc
+        shell: bash
+        run: |
+          printf '%s\n' \
+            '@djalmajr:registry=https://npm.pkg.github.com' \
+            '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' \
+            'always-auth=true' > "$NPM_CONFIG_USERCONFIG"
+          npm publish --access public --registry https://npm.pkg.github.com
 
       - name: Package extension
         shell: bash

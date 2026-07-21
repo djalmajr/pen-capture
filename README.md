@@ -82,6 +82,17 @@ npx skills add djalmajr/pen-capture --list
 
 ## CLI
 
+The versioned CLI is published to GitHub Packages as `@djalmajr/pen-capture`. Configure the GitHub npm registry and authenticate with a token that can read packages:
+
+```sh
+npm config set @djalmajr:registry https://npm.pkg.github.com
+npm install --save-exact @djalmajr/pen-capture@0.1.6
+```
+
+The browser extension remains a separate artifact under GitHub Releases. Projects should pin the CLI version instead of resolving `latest`.
+
+From a source checkout:
+
 ```sh
 bun bin/pen-capture.mjs verify path/to/card.capture.json
 bun bin/pen-capture.mjs convert path/to/card.capture.json /tmp/card.pen-tree.json
@@ -100,7 +111,7 @@ Absolute positions are retained for fidelity, but the original DOM parent/child 
 
 `examples.pen` currently contains the consolidated `preview` capture. The `preview-02` capture is intentionally gated until the first reference is visually approved. The CLI never edits `.pen` files directly; generated batches are applied through Pen MCP.
 
-Pen currently needs nested catalog captures to be materialized once with `Copy` after insertion. Because copying regenerates descendant IDs, the import workflow finishes by querying the copied subtree and normalizing every layer to `Name (#currentId)`.
+Pen currently needs nested catalog captures to be materialized once with `Copy` after insertion. Because copying regenerates descendant IDs, the import workflow finishes by querying the copied subtree and normalizing every layer to `Name (currentId)`.
 
 ## Visual comparison
 

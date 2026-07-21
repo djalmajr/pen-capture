@@ -4,7 +4,7 @@
   "workspaces": {
     "": {
       "name": "pen-capture",
-      "devDependencies": {
+      "dependencies": {
         "playwright": "1.61.1",
       },
     },
